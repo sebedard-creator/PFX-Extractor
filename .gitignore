@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# PFX Extractor - Dossier de travail local (fichiers audio lourds)
+work/
+
+# SECURITY: Secrets & API Tokens (NE JAMAIS COMMITER)
+credentials.json
+token.json
+
+# Configuration utilisateur
+colab_link.txt
+
+# Google Colab temp files (si jamais téléchargés)
+*.tmp

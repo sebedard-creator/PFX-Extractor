@@ -1,0 +1,6 @@
+gradio==4.44.1
+pydantic<2.9
+fastapi==0.110.3
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
