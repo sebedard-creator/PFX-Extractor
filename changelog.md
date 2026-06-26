@@ -1,7 +1,8 @@
 # Changelog - PFX Extractor
 
 ## 2026-06-26
-### Backend Colab (v3)
+### Backend Colab (v4)
+- **Ratio IA Dynamique** : Ajout d'un curseur (slider) dans la Cellule 1 pour contrôler finement la proportion de mixage entre BS-RoFormer et MDX23C (défaut: 50/50), permettant de privilégier la suppression vocale ou la préservation des textures.
 - **Correctif CUDA** : Ajout d'une désinstallation/réinstallation forcée de `onnxruntime-gpu` pour pointer vers le dépôt spécifique CUDA 12, corrigeant l'erreur `libcudart.so.13` sur Google Colab.
 - **Gestion des Silences (Fallback)** : Ajout d'un contrôle de sécurité dans `process_batch` pour contourner le plantage (`LibsndfileError`) causé par l'optimisation de `audio-separator` qui ignore les fichiers muets (bypass automatique de l'IA pour les fichiers silencieux).
 - **Reprise après plantage (Smart Cache)** : Modification du script pour éviter de purger les fichiers IA temporaires et ignorer l'inférence des fichiers déjà traités si le script est relancé.

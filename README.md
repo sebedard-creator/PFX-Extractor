@@ -50,7 +50,7 @@ Pour que l'application locale puisse écrire dans votre Google Drive :
 
 1. **Démarrer l'interface locale** : Double-cliquez sur `start.bat` (ou lancez `python app_local.py`). L'interface s'ouvrira dans votre navigateur.
 2. **Envoyer les fichiers** : Déposez vos pistes `.wav` dans l'interface et cliquez sur "Upload vers Google Drive".
-3. **Lancer le Traitement IA** : Cliquez sur le bouton "Ouvrir Google Colab". Dans Colab, lancez toutes les cellules du notebook `Colab_Backend_PFX_FINAL_26_Juin_v3.ipynb`.
+3. **Lancer le Traitement IA** : Cliquez sur le bouton "Ouvrir Google Colab". Dans Colab, lancez toutes les cellules du notebook `Colab_Backend_PFX_FINAL_26_Juin_v4.ipynb`.
 4. **Récupérer le résultat** : Une fois Colab terminé, retournez sur l'interface locale et cliquez sur "Télécharger les fichiers traités en ZIP".
 5. **Nettoyer** : Utilisez le bouton rouge "Effacer la cache" pour vider votre Google Drive et préparer la prochaine session de travail.
 
@@ -62,4 +62,5 @@ Pour que l'application locale puisse écrire dans votre Google Drive :
 *   **Suivi des coûts** : À la fin de chaque exécution Colab, un log financier s'imprime pour vous indiquer le coût de traitement estimé de la session en cours.
 
 ---
-*PFX Extractor v1.0 - 2026*
+*PFX Extractor v1.0 - 2026*  
+*Conçu par Sébastien Bédard*

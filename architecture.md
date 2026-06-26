@@ -17,7 +17,7 @@ Le code local est structuré autour de plusieurs modules distincts :
 - **Moteur Frontend / Drive Bridge (`app_local.py`) :** Interface web locale développée avec Gradio. Elle ne gère aucun traitement audio directement, mais orchestre l'expérience utilisateur, l'upload, le téléchargement, et le nettoyage des fichiers.
 - **Gestionnaire API Drive (`drive_auth.py`) :** Module robuste chargé de l'authentification OAuth 2.0 avec l'API Google Drive. Il s'occupe de la création de la hiérarchie de dossiers requise et des transferts bidirectionnels de fichiers.
 - **Module DSP (`dsp_local.py`) :** Bibliothèque de fonctions avancées de traitement numérique du signal (Filtre DC, Masques Multi-résolution via Librosa, réduction de bruit non-stationnaire `noisereduce`). *Note : Ce module contient la logique de post-traitement du signal initialement prévue pour du temps réel, mais agit pour l'instant comme une bibliothèque indépendante dans la version actuelle du Drive Bridge.*
-- **Backend Colab (`Colab_Backend_PFX_FINAL_26_Juin_v3.ipynb`) :** Le script exécuté sur les serveurs de Google (GPU), responsable de la séparation de sources (inclut désormais une gestion intelligente des silences et un mode de reprise rapide).
+- **Backend Colab (`Colab_Backend_PFX_FINAL_26_Juin_v4.ipynb`) :** Le script exécuté sur les serveurs de Google (GPU), responsable de la séparation de sources (inclut désormais une gestion intelligente des silences et un mode de reprise rapide).
 - **Scripts de lancement (`start.bat`, `stop.bat`, `*.vbs`) :** Scripts utilitaires pour instancier le serveur Gradio de manière invisible pour l'utilisateur.
 
 ## 4. GESTION DE L'ESPACE DE TRAVAIL LOCAL
