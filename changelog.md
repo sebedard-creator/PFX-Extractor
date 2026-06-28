@@ -9,8 +9,9 @@
 - **Bilan Financier (Cellule 7)** : Ajout d'un script de fin de traitement qui lit `/proc/uptime`, détecte le GPU alloué et calcule le coût estimé en Compute Units et en USD.
 
 ### Frontend Local (Drive Bridge)
+- **Correctif Javascript (Bouton Colab)** : Résolution d'un bug où le bouton "Ouvrir Google Colab" ne se mettait pas à jour dynamiquement ou ouvrait un onglet vide après un changement d'URL. Implémentation d'un listener JS connecté à une variable d'état cachée pour un rechargement fiable à 100%.
 - **Bouton Compute Units** : Ajout d'un bouton redirigeant vers la page d'achat de Compute Units Colab.
 - **Paramètres Avancés** : Ajout d'un menu déroulant permettant de mettre à jour dynamiquement et de sauvegarder (`colab_link.txt`) le lien vers le notebook Colab sans avoir à modifier le code source.
 
 ### Documentation
-- **architecture.md** : Création/Mise à jour complète reflétant l'architecture "Drive Bridge" actuelle et le nouveau nom du fichier Colab (`Colab_Backend_PFX_FINAL_26_Juin_v3.ipynb`).
+- **architecture.md** : Création/Mise à jour complète reflétant l'architecture "Drive Bridge" actuelle et le nouveau nom du fichier Colab (`Colab_Backend_PFX_FINAL_26_Juin_v4.ipynb`).

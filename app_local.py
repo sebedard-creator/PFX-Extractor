@@ -207,7 +207,7 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
 
     with gr.Row():
         upload_btn = gr.Button("Upload vers Google Drive", variant="primary", size="lg")
-        colab_btn = gr.Button("Ouvrir Google Colab", link=COLAB_URL, variant="secondary", size="lg")
+        colab_btn = gr.Button("Ouvrir Google Colab", variant="secondary", size="lg")
         gr.Button("➕ Compute Units", link=COMPUTE_UNITS_URL, variant="secondary", size="lg")
 
     with gr.Row():
@@ -222,6 +222,8 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
         with gr.Row():
             confirm_clear_btn = gr.Button("Confirmer", variant="stop", size="sm")
             cancel_clear_btn = gr.Button("Annuler", variant="secondary", size="sm")
+
+    colab_link_box = gr.Textbox(visible=False, value=COLAB_URL)
 
     status_box = gr.Textbox(
         label="Statut",
@@ -279,13 +281,21 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
 
     def save_colab_url(new_url):
         CONFIG_FILE.write_text(new_url.strip(), encoding="utf-8")
-        # In Gradio, returning gr.Button(...) or gr.update(...) updates the component properties
-        return gr.Button(link=new_url.strip()), "Lien Colab mis à jour avec succès et sauvegardé pour les prochaines sessions !"
+        return new_url.strip(), "Lien Colab mis à jour avec succès et sauvegardé pour les prochaines sessions !"
 
     save_url_btn.click(
         fn=save_colab_url,
         inputs=colab_url_input,
-        outputs=[colab_btn, status_box],
+        outputs=[colab_link_box, status_box],
+        show_api=False,
+    )
+
+    # Ouvre le lien dynamiquement en lisant la dernière version sauvegardée
+    colab_btn.click(
+        fn=None,
+        inputs=[colab_link_box],
+        outputs=None,
+        js="(url) => { window.open(url, '_blank'); }",
         show_api=False,
     )
 
