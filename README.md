@@ -1,6 +1,6 @@
 # 🎙️ PFX Extractor - Drive Bridge
 
-> **Language note:** This README is written in English, but the codebase itself — all inline comments, variable/function names, print statements, and the Colab notebook's documentation — is written in French (Québécois audio post-production terminology). This is a personal tool built by a Montreal-based sound editor for his own post-production workflow, not a general-purpose commercial product.
+> **Language note:** This README is written in English, but the codebase itself — all inline comments, variable/function names, print statements, and the Colab notebook's documentation — is written in French.
 
 **PFX Extractor** is a hybrid (local + cloud GPU) toolchain for audio post-production professionals. It automatically extracts production sound effects (PFX) and ambiences from raw location-sound recordings using state-of-the-art AI source-separation models (BS-RoFormer & MDX-Net), combined with a dedicated sound-event detector that catches what those separation models miss — sighs, breaths, screams, and other non-lexical human vocalizations.
 
