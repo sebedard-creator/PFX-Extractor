@@ -4,3 +4,4 @@ fastapi==0.110.3
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
+pt_api @ git+https://github.com/sebedard-creator/pt_api.git@v1.3.8

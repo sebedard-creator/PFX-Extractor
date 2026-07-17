@@ -60,6 +60,7 @@ To avoid needing a powerful local machine, the app uses a "Drive Bridge" archite
 
 ### 1. Requirements
 * Python 3.10+
+* Git, used by `pip` to install the pinned `pt_api` dependency from GitHub.
 * A Google account with access to Google Drive and Google Colaboratory.
 
 ### 2. Local dependencies
@@ -68,7 +69,13 @@ Clone this repository, then install the local interface's dependencies:
 pip install -r requirements.txt
 ```
 
-Pro Tools export also requires `pt_api` 1.3.8 or newer. PFX Extractor looks for it in this order: `PT_API_PATH`, an installed `pt_api` module, then a sibling repository named `pt_api` next to this repository. The current development layout (`Y:\PFX Extractor` and `Y:\pt_api`) therefore works without a machine-specific dependency entry.
+`requirements.txt` installs the validated `pt_api` release directly from the immutable Git tag `v1.3.8`. PFX Extractor resolves the runtime in this order: `PT_API_PATH`, the installed `pt_api` module, then a sibling repository named `pt_api` next to this repository. The final option remains a development fallback; normal installations use the pinned package.
+
+After pulling a revision that changes `requirements.txt` into an existing virtual environment, update it once with:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
 
 Place a compatible native Pro Tools template at the repository root as `template.ptx`. This proprietary file is intentionally excluded by `.gitignore` and must be provisioned separately on every installation that needs PTX export. The validated local template is an empty mono 48 kHz / 23.976 fps session with uniquely named `PFX 01` and `PFX 02` tracks and the imported-media prototype required by `pt_api`.
 
