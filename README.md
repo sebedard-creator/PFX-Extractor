@@ -52,8 +52,7 @@ To avoid needing a powerful local machine, the app uses a "Drive Bridge" archite
 
 1. **Local interface (Gradio)** — `app_local.py` runs on your machine. You drop raw files in; `drive_auth.py` handles Google Drive authentication and syncs them up.
 2. **Cloud backend (Colab)** — `Colab_Backend_PFX_V3_0.ipynb` runs on Google's GPU servers. It downloads the raw files, aligns/merges/denoises them, runs the dual AI separation + YAMNet multi-mask pipeline, and uploads the finished PFX tracks back to Drive.
-3. **Retrieval** — The local interface downloads the processed files from Drive and delivers a clean `.zip`.
-4. **Pro Tools assembly** — `protools_export.py` applies PFX Extractor's filename sorting and track-routing policy, then calls the generic `pt_api` 1.3.8+ template builder. A local `template.ptx` at the repository root is used by default; an alternate compatible template can be selected in Advanced Settings.
+3. **Retrieval and Pro Tools assembly** — One frontend action downloads the processed WAV files from Drive without creating an intermediate WAV archive. `protools_export.py` then applies PFX Extractor's filename sorting and track-routing policy and calls the generic `pt_api` 1.3.8+ template builder. The browser receives a single ZIP containing the `.ptx` session and its `Audio Files` folder. A local `template.ptx` at the repository root is used by default; an alternate compatible template can be selected in Advanced Settings.
 
 ---
 
@@ -86,9 +85,8 @@ For the local app to write to your Google Drive:
 1. **Start the local interface** — Double-click `start.bat` (or run `python app_local.py`). The interface opens in your browser.
 2. **Send your files** — Drop your `.wav` tracks in the interface and click "Upload vers Google Drive".
 3. **Run the AI processing** — Click "Ouvrir Google Colab". In Colab, adjust the parameters in the control panel cell if needed, then run every cell in `Colab_Backend_PFX_V3_0.ipynb` in order.
-4. **Retrieve the result** — Once Colab finishes, go back to the local interface and click "Télécharger les fichiers traités en ZIP".
-5. **Create the Pro Tools session** — Click "Créer la session Pro Tools". The default template creates `PFX 01` and, when a second filename family is present, `PFX 02`. The Advanced Settings panel can override the template or session name. Download and unpack the returned ZIP before opening its `.ptx` file.
-6. **Clean up** — Use the red "Effacer la cache" button to clear your Drive and local working folders, generated Pro Tools deliveries, and prepare the next session.
+4. **Retrieve the Pro Tools result** — Once Colab finishes, go back to the local interface and click "Télécharger les fichiers traités en ZIP". This single action downloads the WAV files from Drive, creates the Pro Tools session, and downloads the final ZIP. The default template routes the first filename family to `PFX 01` and a second family to `PFX 02`; Advanced Settings can override the template or session name. Unpack the returned ZIP before opening its `.ptx` file.
+5. **Clean up** — Use the red "Effacer la cache" button to clear your Drive and local working folders, generated Pro Tools deliveries, and prepare the next session.
 
 The validated local template and builder currently target mono, 48 kHz, 23.976 fps sessions. Input WAV files must be mono 48 kHz, 32-bit float WAVE_EXTENSIBLE files with valid BWF metadata and must respect the format limits documented by `pt_api`. Export is transactional: an error does not publish an incomplete delivery.
 

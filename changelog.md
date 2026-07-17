@@ -13,7 +13,7 @@
 - **Passage à V3.0** — Le notebook est renommé `Colab_Backend_PFX_V3_0.ipynb`; son en-tête, le README, l'architecture et le handoff sont harmonisés sur la nouvelle version majeure.
 
 ### Frontend local V3.0 — livraison Pro Tools
-- **Assemblage PTX depuis les sorties Colab** — Ajout du bouton `Créer la session Pro Tools`, qui transforme le contenu courant de `work/processed` en une livraison autonome `.ptx` + `Audio Files`, puis en ZIP téléchargeable.
+- **Téléchargement et assemblage PTX en un clic** — Le bouton existant `Télécharger les fichiers traités en ZIP` récupère maintenant les WAV depuis Drive, les transforme immédiatement en livraison autonome `.ptx` + `Audio Files`, puis télécharge le ZIP Pro Tools. Le bouton séparé `Créer la session Pro Tools` est retiré comme redondant et aucun ZIP WAV intermédiaire n'est créé par le frontend.
 - **Adaptateur applicatif générique** — Nouveau module `protools_export.py`. Il applique uniquement la convention de PFX Extractor (`<famille>-Gain_<numéro>_PFX_Ready.wav`), l'ordre alphabétique et l'affectation maximale à `PFX 01`/`PFX 02`, tandis que toute mutation binaire demeure déléguée à l'API générique `pt_api` 1.3.8+.
 - **Template validée locale** — Le frontend utilise par défaut un `template.ptx` natif mono 48 kHz/23,976 à deux pistes placé à la racine. Ce format propriétaire est exclu par `.gitignore` et doit être fourni séparément; une autre template compatible et un nom de session peuvent être sélectionnés dans les paramètres avancés.
 - **Livraison sûre** — Les exports existants ne sont jamais écrasés; les échecs retirent le nouveau dossier incomplet et ne publient aucun ZIP partiel. Le nettoyage local inclut déjà `work/exports` et couvre donc aussi les sessions générées.

@@ -80,18 +80,6 @@ AUTO_DOWNLOAD_JS = """
 }
 """
 
-AUTO_DOWNLOAD_PTX_JS = """
-() => {
-    setTimeout(() => {
-        const container = document.querySelector("#pfx_ptx_output");
-        const link = container?.querySelector("a[download], a[href*='/file='], a[href*='/file/']");
-        if (link) {
-            link.click();
-        }
-    }, 800);
-}
-"""
-
 def _plural(count, singular, plural=None):
     if count == 1:
         return f"1 {singular}"
@@ -143,43 +131,30 @@ def upload_raw_files(files):
     return status, None
 
 
-def download_processed_zip():
+def download_processed_zip(template_file, session_name):
     try:
-        zip_path, result = drive_auth.download_processed_as_zip()
-    except Exception as exc:
-        return (
-            "Download interrompu.\n\n"
-            f"Erreur: {exc}"
-        ), None
+        _, drive_result = drive_auth.download_processed_files()
+        if drive_result["count"] == 0:
+            raise gr.Error(
+                f"Aucun fichier traité trouvé dans "
+                f"{drive_auth.PARENT_FOLDER_NAME}/"
+                f"{drive_auth.PROCESSED_FOLDER_NAME}."
+            )
 
-    count = result["count"]
-    if not zip_path or count == 0:
-        raise gr.Error(
-            f"Aucun fichier traite trouve dans "
-            f"{drive_auth.PARENT_FOLDER_NAME}/{drive_auth.PROCESSED_FOLDER_NAME}."
-        )
-
-    status = (
-        f"ZIP cree: {_plural(count, 'fichier')} telecharge(s) depuis Drive.\n"
-        f"{zip_path}\n\n"
-        f"Contenu:\n{_names_preview(result['names'])}"
-    )
-    return status, zip_path
-
-
-def build_protools_session(template_file, session_name):
-    try:
         result = protools_export.create_protools_delivery(
             processed_dir=drive_auth.PROCESSED_DIR,
             exports_dir=drive_auth.EXPORTS_DIR,
             template_path=template_file,
             session_name=session_name,
         )
+    except gr.Error:
+        raise
     except Exception as exc:
         return (
-            "Export Pro Tools interrompu.\n\n"
+            "Téléchargement ou création Pro Tools interrompu.\n\n"
             f"Erreur: {exc}\n\n"
-            "Aucune archive de livraison incomplète n'a été conservée."
+            "Les WAV déjà téléchargés restent dans le dossier de travail. "
+            "Aucune livraison Pro Tools incomplète n'a été publiée."
         ), None
 
     track_summary = ", ".join(
@@ -188,6 +163,8 @@ def build_protools_session(template_file, session_name):
         for entry in result["families"]
     )
     status = (
+        f"Téléchargement terminé: "
+        f"{_plural(drive_result['count'], 'fichier')} récupéré(s) depuis Drive.\n"
         f"Session Pro Tools créée: {_plural(result['processed_count'], 'clip')} "
         f"réparti(s) sur {_plural(result['track_count'], 'piste')}.\n"
         f"Pistes: {track_summary}\n\n"
@@ -216,7 +193,7 @@ def clear_cache():
             "Aucun fichier systeme n'a ete supprime. "
             "Si Google demande une autorisation, relance l'action apres avoir termine la connexion."
         )
-        return status, None, None, None, gr.update(visible=False)
+        return status, None, None, gr.update(visible=False)
 
     status = (
         "Cache effacee.\n"
@@ -229,7 +206,7 @@ def clear_cache():
             "\n\nCertains fichiers Drive n'ont pas pu etre supprimes:\n"
             + _names_preview(result["drive_failed"], limit=5)
         )
-    return status, None, None, None, gr.update(visible=False)
+    return status, None, None, gr.update(visible=False)
 
 
 with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
@@ -254,8 +231,7 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
         gr.Button("➕ Compute Units", link=COMPUTE_UNITS_URL, variant="secondary", size="lg")
 
     with gr.Row():
-        download_btn = gr.Button("Telecharger les fichiers traites en ZIP", variant="primary", size="lg")
-        protools_btn = gr.Button("Créer la session Pro Tools", variant="primary", size="lg")
+        download_btn = gr.Button("Télécharger les fichiers traités en ZIP", variant="primary", size="lg")
         clear_btn = gr.Button("Effacer la cache", variant="stop", size="lg")
 
     with gr.Group(visible=False, elem_classes=["pfx-confirm"]) as clear_confirmation:
@@ -278,15 +254,9 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
     )
 
     zip_output = gr.File(
-        label="ZIP pret a telecharger",
-        interactive=False,
-        elem_id="pfx_zip_output",
-    )
-
-    protools_output = gr.File(
         label="Session Pro Tools prête à télécharger (.zip)",
         interactive=False,
-        elem_id="pfx_ptx_output",
+        elem_id="pfx_zip_output",
     )
 
     upload_btn.click(
@@ -295,14 +265,6 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
         outputs=[status_box, raw_files],
         show_api=False,
     )
-
-    download_event = download_btn.click(
-        fn=download_processed_zip,
-        inputs=None,
-        outputs=[status_box, zip_output],
-        show_api=False,
-    )
-    download_event.then(fn=None, js=AUTO_DOWNLOAD_JS)
 
     clear_btn.click(
         fn=show_clear_confirmation,
@@ -323,7 +285,6 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
             status_box,
             raw_files,
             zip_output,
-            protools_output,
             clear_confirmation,
         ],
         show_api=False,
@@ -331,9 +292,10 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
 
     with gr.Accordion("⚙️ Paramètres avancés", open=False):
         gr.Markdown(
-            "La création Pro Tools utilise le `template.ptx` local placé à la racine "
-            "de l'application. Ce fichier propriétaire n'est pas versionné. Vous pouvez "
-            "fournir une autre template et un nom de session pour un export ponctuel."
+            "Le bouton de téléchargement crée automatiquement la session Pro Tools avec "
+            "le `template.ptx` local placé à la racine de l'application. Ce fichier "
+            "propriétaire n'est pas versionné. Vous pouvez fournir une autre template "
+            "et un nom de session pour un export ponctuel."
         )
         with gr.Row():
             protools_template = gr.File(
@@ -353,13 +315,13 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
             colab_url_input = gr.Textbox(label="Nouveau lien Google Colab", value=COLAB_URL, scale=4)
             save_url_btn = gr.Button("Sauvegarder le lien", variant="secondary", scale=1)
 
-    protools_event = protools_btn.click(
-        fn=build_protools_session,
+    download_event = download_btn.click(
+        fn=download_processed_zip,
         inputs=[protools_template, protools_session_name],
-        outputs=[status_box, protools_output],
+        outputs=[status_box, zip_output],
         show_api=False,
     )
-    protools_event.then(fn=None, js=AUTO_DOWNLOAD_PTX_JS)
+    download_event.then(fn=None, js=AUTO_DOWNLOAD_JS)
 
     def save_colab_url(new_url):
         CONFIG_FILE.write_text(new_url.strip(), encoding="utf-8")

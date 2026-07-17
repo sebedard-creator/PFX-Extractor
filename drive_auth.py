@@ -207,14 +207,15 @@ def upload_files(filepaths, progress=None):
     return {"count": len(uploaded_names), "names": uploaded_names, "failed": failed}
 
 
-def download_processed_as_zip(progress=None):
+def download_processed_files(progress=None):
+    """Télécharge les sorties Drive dans work/processed sans créer d'archive."""
     ensure_work_dirs()
     service = authenticate_drive()
     _, _, processed_folder_id = get_pfx_folders(service)
 
     files = _list_files_in_folder(service, processed_folder_id)
     if not files:
-        return None, {"count": 0, "names": []}
+        return [], {"count": 0, "names": []}
 
     _clear_directory_contents(PROCESSED_DIR)
     downloaded_paths = []
@@ -234,16 +235,33 @@ def download_processed_as_zip(progress=None):
 
         downloaded_paths.append(destination)
 
+    if progress:
+        progress(1.0, desc="Fichiers traites telecharges")
+
+    return downloaded_paths, {
+        "count": len(downloaded_paths),
+        "names": [path.name for path in downloaded_paths],
+    }
+
+
+def download_processed_as_zip(progress=None):
+    """Compatibilité: télécharge les sorties puis crée l'ancien ZIP de WAV."""
+    downloaded_paths, result = download_processed_files(progress=progress)
+    if not downloaded_paths:
+        return None, result
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_path = EXPORTS_DIR / f"PFX_processed_{timestamp}.zip"
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+    with zipfile.ZipFile(
+        zip_path,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+        allowZip64=True,
+    ) as archive:
         for path in downloaded_paths:
             archive.write(path, arcname=path.name)
 
-    if progress:
-        progress(1.0, desc="ZIP pret")
-
-    return str(zip_path), {"count": len(downloaded_paths), "names": [p.name for p in downloaded_paths]}
+    return str(zip_path), result
 
 
 def clear_local_cache(include_runtime=False):
