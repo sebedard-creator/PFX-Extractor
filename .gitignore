@@ -16,5 +16,8 @@ token.json
 # Configuration utilisateur
 colab_link.txt
 
+# Format propriétaire Pro Tools — requis localement, jamais versionné
+template.ptx
+
 # Google Colab temp files (si jamais téléchargés)
 *.tmp
