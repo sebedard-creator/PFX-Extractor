@@ -19,9 +19,9 @@ Le code local est structuré autour de plusieurs modules distincts :
 - **Adaptateur de livraison Pro Tools (`protools_export.py`) :** Couche propre à PFX Extractor. Elle trie les WAV par filename, impose le format `<famille>-Gain_<numéro>_PFX_Ready.wav`, affecte la première famille à `PFX 01` et la seconde à `PFX 02`, puis appelle `build_audio_session()` de `pt_api`. `requirements.txt` installe la release validée `v1.3.8` depuis son tag GitHub immuable; `PT_API_PATH` et le dépôt frère `pt_api` restent des fallbacks de développement. Une troisième famille est refusée explicitement. Cette politique applicative demeure hors de l'API générique.
 - **Template Pro Tools locale (`template.ptx`) :** Modèle natif validé, vide sur la timeline, possédant les pistes `PFX 01`/`PFX 02` et le prototype média requis par le builder. Ce fichier propriétaire est exclu par `.gitignore` et doit être installé séparément à la racine de chaque déploiement. Le flux intégré cible des sessions mono 48 kHz à 23,976 fps. L'utilisateur peut fournir ponctuellement une autre template compatible dans les paramètres avancés.
 - **~~Module DSP (`dsp_local.py`)~~ — DÉPRÉCIÉ (V2.1) :** Bibliothèque de fonctions DSP initialement prévue comme couche de post-traitement local. Confirmé inutilisé (aucun import dans `app_local.py`) et retiré de la boucle de traitement — la protection PFX et le denoise sont centralisés dans le backend Colab. Le fichier reste dans le dépôt à titre de référence mais n'est plus appelé nulle part.
-- **Backend Colab (`Colab_Backend_PFX_V3_0.ipynb`) :** Le script exécuté sur les serveurs de Google (GPU), responsable de :
+- **Backend Colab (`Colab_Backend_PFX_V3_1_2.ipynb`) :** Le script exécuté sur les serveurs de Google (GPU), responsable de :
   - la séparation de sources (RoFormer + MDX23C, fusion pondérée configurable) ;
-  - l'alignement automatique Lav/Boom avec garde-fou de confiance (voir ci-dessous) ;
+  - l'alignement automatique séquentiel Lav/Boom avec garde-fou de confiance (voir ci-dessous) ;
   - le pré-nettoyage adaptatif avec protection PFX ;
   - la gestion intelligente des silences et le fallback anti-crash ;
   - la réinjection du timecode BWF ;
@@ -37,7 +37,7 @@ Le code local est structuré autour de plusieurs modules distincts :
   Les scores passent par des seuils doux et des enveloppes attaque/relâchement propres à chaque rôle. La protection PFX réduit surtout le masque d'ambiance et ne restaure jamais 100 % du signal brut. Les masques restent au pas temporel YAMNet dans le cache et sont interpolés par blocs de 30 secondes pour limiter la mémoire.
 
   Remplace le sidechain V1.22 (basé sur le stem "Vocals" jeté par les modèles de séparation), abandonné après confirmation que ces modèles ne détectent quasiment aucune trace vocale sur des sons non-lexicaux comme les soupirs.
-- **Garde-fou de confiance sur l'alignement (V2.1) :** L'auto-alignement Lav/Boom (basé sur une corrélation croisée) calcule désormais un score de confiance normalisé avant d'appliquer un décalage temporel. Si deux clips regroupés sous le même identifiant de prise n'ont en réalité aucun rapport acoustique (ex. collision de nommage), l'alignement est ignoré et le clip est copié tel quel plutôt que d'être corrompu.
+- **Appariement et garde-fou de confiance sur l'alignement (V3.1.2) :** Les fichiers contenant `BOOM` et `LAV` sont triés séparément selon l'ordre naturel de leur nom, puis appariés par position; leurs suffixes numériques peuvent différer. Les deux listes doivent avoir le même nombre de fichiers avant traitement. L'alignement par corrélation croisée calcule ensuite un score de confiance normalisé; en dessous du seuil, le Lav est copié tel quel plutôt que d'être décalé sans rapport acoustique. Les sidecars macOS `._*.wav` sont ignorés.
 - **Scripts de lancement (`start.bat`, `stop.bat`, `*.vbs`) :** Scripts utilitaires pour instancier le serveur Gradio de manière invisible pour l'utilisateur.
 
 ## 4. GESTION DE L'ESPACE DE TRAVAIL LOCAL

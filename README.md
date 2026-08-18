@@ -30,8 +30,8 @@ To avoid needing a powerful local machine, the app uses a "Drive Bridge" archite
 * **Adaptive pre-denoise** (`NIVEAU_DENOISE_POURCENTAGE`, `DENOISE_ADAPTATIF`) — A spectral noise-reduction pass runs before AI separation. `DENOISE_ADAPTATIF` toggles between a stationary noise profile (steadier, better for consistent room tone) and an adaptive one (better suited to noisy, variable exterior scenes — traffic, wind — where a stationary profile can cause audible "pumping").
 
 ### Time alignment & clip management
-* **Automatic Lav/Boom time-alignment** — Cross-correlates paired microphone recordings (e.g. `Lav-01.wav` / `Boom-01.wav`) of the same take and time-aligns them to integer-sample accuracy before processing.
-* **Alignment confidence safeguard** — Computes a normalized correlation confidence score for every proposed alignment. If two clips grouped together turn out to have no real acoustic relationship (e.g. an ambiguous filename accidentally groups two unrelated takes), the alignment is skipped and the clip is copied through untouched rather than being corrupted by a meaningless time-shift.
+* **Sequential Lav/Boom time-alignment** — Detects `BOOM` and `LAV` in filenames case-insensitively, sorts each list naturally, then pairs Boom #1 with Lav #1, Boom #2 with Lav #2, etc. Their numeric suffixes do not need to match; paired lists must have equal counts.
+* **Alignment confidence safeguard** — Computes a normalized correlation confidence score for every proposed alignment. If a sequential pair has no real acoustic relationship, alignment is skipped and the Lav clip is copied through untouched rather than being corrupted by a meaningless time-shift. macOS `._*.wav` sidecars are ignored at Colab ingestion.
 * **Snowball Merge** — Temporarily concatenates short clips from the same take/family until they reach the minimum duration required for stable AI inference (5s), while recording every source boundary. After processing, the merged result is split back into one output per original clip, preserving each clip's name, duration, and BWF timecode.
 
 ### Timecode & delivery
@@ -51,7 +51,7 @@ To avoid needing a powerful local machine, the app uses a "Drive Bridge" archite
 ## 🏗️ Architecture
 
 1. **Local interface (Gradio)** — `app_local.py` runs on your machine. You drop raw files in; `drive_auth.py` handles Google Drive authentication and syncs them up.
-2. **Cloud backend (Colab)** — `Colab_Backend_PFX_V3_0.ipynb` runs on Google's GPU servers. It downloads the raw files, aligns/merges/denoises them, runs the dual AI separation + YAMNet multi-mask pipeline, and uploads the finished PFX tracks back to Drive.
+2. **Cloud backend (Colab)** — `Colab_Backend_PFX_V3_1_2.ipynb` runs on Google's GPU servers. It downloads the raw files, aligns/merges/denoises them, runs the dual AI separation + YAMNet multi-mask pipeline, and uploads the finished PFX tracks back to Drive.
 3. **Retrieval and Pro Tools assembly** — One frontend action downloads the processed WAV files from Drive without creating an intermediate WAV archive. `protools_export.py` then applies PFX Extractor's filename sorting and track-routing policy and calls the generic `pt_api` 1.3.8+ template builder. The browser receives a single ZIP containing the `.ptx` session and its `Audio Files` folder. A local `template.ptx` at the repository root is used by default; an alternate compatible template can be selected in Advanced Settings.
 
 ---

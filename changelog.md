@@ -1,5 +1,14 @@
 # Changelog - PFX Extractor
 
+## 2026-08-17
+### Backend Colab V3.1.2 — fiabilité de préparation et appariement des microphones
+- **Prévol et cache persistant des modèles** — MDX23C, BS-RoFormer et leurs YAML sont validés avant toute purge ou analyse audio, puis conservés dans `PFX_Extractor/0_Model_Cache` sur Drive. Une ressource indisponible échoue donc immédiatement, et non après le calcul du batch.
+- **WAV ultra-courts importables** — Les rendus inférieurs à 1024 échantillons reçoivent un court padding de silence avant l'ancrage BWF; le fichier de sortie est ensuite contrôlé afin d'éviter un WAV vide refusé par `pt_api`.
+- **Appariement séquentiel Boom/Lav** — Les numéros internes des deux micros ne sont plus comparés. Les listes `BOOM` et `LAV` sont triées naturellement et associées par position; leurs comptes doivent être égaux. Les sidecars macOS `._*.wav` sont exclus de l'ingestion.
+- **Version du notebook** — `Colab_Backend_PFX_V3_1_2.ipynb` remplace la révision V3.1.1 non publiée.
+
+---
+
 ## 2026-07-17
 ### Backend Colab V3.0 — refonte Production FX
 - **Partition exacte 521/521** — Suppression de la sélection par sous-chaînes, qui pouvait confondre des classes comme `Hum`/`Humming` ou produire des faux positifs avec `run`. Les indices YAMNet sont maintenant répartis dans six groupes non chevauchants, avec assertions sur les comptes attendus.
