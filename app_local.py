@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -9,6 +10,22 @@ drive_auth.ensure_work_dirs()
 os.environ.setdefault("GRADIO_TEMP_DIR", str(drive_auth.GRADIO_TEMP_DIR))
 
 import gradio as gr
+
+
+# Les erreurs Gradio n'affichaient qu'un toast "Error" sans detail: on garde
+# desormais la trace complete dans work/app.log, en plus de la console.
+LOG_FILE = drive_auth.WORK_DIR / "app.log"
+logging.basicConfig(
+    # WARNING a la racine: sinon httpx journalise chaque requete Drive.
+    level=logging.WARNING,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
+logger = logging.getLogger("pfx_extractor")
+logger.setLevel(logging.INFO)
 
 
 CONFIG_FILE = Path(__file__).parent / "colab_link.txt"
@@ -107,6 +124,7 @@ def upload_raw_files(files):
     except gr.Error:
         raise
     except Exception as exc:
+        logger.exception("Echec de l'upload vers Google Drive.")
         return (
             "Upload interrompu.\n\n"
             f"Erreur: {exc}\n\n"
@@ -131,9 +149,13 @@ def upload_raw_files(files):
     return status, None
 
 
-def download_processed_zip(template_file, session_name):
+def download_processed_zip(template_file, session_name, progress=gr.Progress()):
     try:
-        _, drive_result = drive_auth.download_processed_files()
+        logger.info("Telechargement des fichiers traites demande.")
+        # La progression garde le flux SSE vivant: sans elle, un lot de
+        # plusieurs centaines de Mo depasse le delai du navigateur.
+        progress(0.0, desc="Connexion a Google Drive...")
+        _, drive_result = drive_auth.download_processed_files(progress=progress)
         if drive_result["count"] == 0:
             raise gr.Error(
                 f"Aucun fichier traité trouvé dans "
@@ -141,6 +163,7 @@ def download_processed_zip(template_file, session_name):
                 f"{drive_auth.PROCESSED_FOLDER_NAME}."
             )
 
+        progress(1.0, desc="Création de la session Pro Tools...")
         result = protools_export.create_protools_delivery(
             processed_dir=drive_auth.PROCESSED_DIR,
             exports_dir=drive_auth.EXPORTS_DIR,
@@ -150,6 +173,7 @@ def download_processed_zip(template_file, session_name):
     except gr.Error:
         raise
     except Exception as exc:
+        logger.exception("Echec du telechargement ou de l'export Pro Tools.")
         return (
             "Téléchargement ou création Pro Tools interrompu.\n\n"
             f"Erreur: {exc}\n\n"
@@ -171,6 +195,7 @@ def download_processed_zip(template_file, session_name):
         f"Session: {result['session_path']}\n"
         f"Livraison: {result['archive_path']}"
     )
+    logger.info("Livraison prete: %s", result["archive_path"])
     return status, result["archive_path"]
 
 
@@ -186,6 +211,7 @@ def clear_cache():
     try:
         result = drive_auth.clear_all_cache(include_runtime=True)
     except Exception as exc:
+        logger.exception("Echec de l'effacement de la cache.")
         drive_auth.ensure_work_dirs()
         status = (
             "Effacement interrompu.\n\n"
@@ -347,10 +373,12 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
 
 
 if __name__ == "__main__":
+    logger.info("Demarrage de PFX Extractor. Journal: %s", LOG_FILE)
     demo.queue(default_concurrency_limit=1).launch(
         server_name="0.0.0.0",
         server_port=7862,
         inbrowser=False,
         allowed_paths=[str(drive_auth.WORK_DIR)],
         show_api=False,
+        show_error=True,
     )
