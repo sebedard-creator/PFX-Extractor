@@ -1,150 +1,194 @@
-# 🎙️ PFX Extractor - Drive Bridge
+# PFX Extractor
 
-## Experimental backend V3.3.0
+**PFX Extractor** turns location-recording WAV files into a Production FX stem: it aims to retain usable on-set physical sound—clothing movement, footsteps, props, handling and impacts—while reducing speech, other human sounds, room tone, exterior traffic, weather, music, television/radio, vehicles and other non-PFX material.
 
-`Colab_Backend_PFX_V3_3_0.ipynb` adds contextual mouth-noise attenuation (95% default) and a guarded bodytalk boost (up to +2 dB default), retaining the V3.2.0 breath/whisper improvements. Both earlier notebooks remain available. Set mouth attenuation to 0% and bodytalk gain to 0 dB to recover V3.2.0 audio behavior. These are experimental classifiers, not isolated mouth/clothing stems; listening validation is required. See [V3.3.0 trial guide](ESSAI_V3_3_0.md) for controls, limitations and comparison instructions. Frontend/PTX delivery is unchanged.
+It is a Windows-first workflow for post-production:
 
-> **Language note:** This README is written in English, but the codebase itself — all inline comments, variable/function names, print statements, and the Colab notebook's documentation — is written in French.
-
-**PFX Extractor** is a hybrid (local + cloud GPU) toolchain for audio post-production professionals. It creates a production-FX stem from raw location recordings: synchronized physical sounds such as footsteps, clothing, props, manipulations, and impacts are preserved, while human sounds, roomtone, exterior traffic, weather, music, and other ambience are reduced.
-
-To avoid needing a powerful local machine, the app uses a "Drive Bridge" architecture: a lightweight local web interface syncs your files to Google Drive, Google Colab's GPU servers do the heavy processing, and the local interface then retrieves the finished result.
-
----
-
-## ✨ Features
-
-### Core source separation
-* **Dual-model AI separation** — Runs both **BS-RoFormer** and **MDX23C** on every clip and blends their "Instrumental" (non-vocal) outputs with a configurable weighted mix (`RATIO_ROFORMER`, default 60% RoFormer / 40% MDX23C — RoFormer tends to produce cleaner splits with fewer artifacts for PFX work).
-* **Configurable AI overlap** (`AI_OVERLAP`) — Controls how much adjacent inference segments overlap. Higher overlap smooths the separation mask over time, reducing audible "pumping" on busy or noisy material, at the cost of extra GPU time.
-
-### Production-FX event routing (YAMNet)
-* **Sound-event detector, decoupled from the separation models** — The pipeline runs **YAMNet** on the untouched merged audio before denoising or source separation. It catches non-lexical human sounds and also distinguishes production effects from ambience and other content that does not belong in the PFX stem.
-* **Exact, exhaustive class partition** — All **521 YAMNet/AudioSet indices** are assigned explicitly to one of six non-overlapping roles. The notebook validates the expected group counts and aborts if the model taxonomy changes. Substring matching (`hum`, `run`, etc.) is no longer used.
-* **Separate thresholded masks** — Raw class maxima no longer drive gain directly. Human, ambience, outside-PFX, and PFX-protection evidence use independent soft thresholds and attack/release envelopes:
-  * **Human removal** (`DUCK_DEPTH_HUMAIN`) — voices, vocalizations, breathing, physiological sounds, and applause.
-  * **Ambience removal** (`DUCK_DEPTH_AMBIANCE`) — nature/weather, roadway traffic, roomtone-like noise, static, and hum.
-  * **Outside-PFX removal** (`DUCK_DEPTH_HORS_PFX`) — music, TV/radio content, vehicles, sirens, and low-frequency/vibration classes.
-  * **PFX protection** (`PROTECTION_PFX`) — footsteps, cloth, props, manipulations, impacts, tools, and other production effects reduce denoise and mask depth locally; restoration of raw audio is capped below 100%.
-  * **Contextual classes** — isolated foreground animals and short electronic tones are preserved, while persistent/diffuse occurrences are routed to removal using temporal persistence.
-  * **Context-only classes** — `Inside`, `Outside`, `Reverberation`, `Echo`, `Field recording`, and `Silence` never drive a local gain curve.
-* **Memory-bounded processing** — Frame-level YAMNet masks are cached and interpolated in 30-second blocks, avoiding several full-resolution mask arrays on long recordings.
-
-### Noise reduction
-* **Adaptive pre-denoise** (`NIVEAU_DENOISE_POURCENTAGE`, `DENOISE_ADAPTATIF`) — A spectral noise-reduction pass runs before AI separation. `DENOISE_ADAPTATIF` toggles between a stationary noise profile (steadier, better for consistent room tone) and an adaptive one (better suited to noisy, variable exterior scenes — traffic, wind — where a stationary profile can cause audible "pumping").
-
-### Time alignment & clip management
-* **Sequential Lav/Boom time-alignment** — Detects `BOOM` and `LAV` in filenames case-insensitively, sorts each list naturally, then pairs Boom #1 with Lav #1, Boom #2 with Lav #2, etc. Their numeric suffixes do not need to match; paired lists must have equal counts.
-* **Alignment confidence safeguard** — Computes a normalized correlation confidence score for every proposed alignment. If a sequential pair has no real acoustic relationship, alignment is skipped and the Lav clip is copied through untouched rather than being corrupted by a meaningless time-shift. macOS `._*.wav` sidecars are ignored at Colab ingestion.
-* **Snowball Merge** — Temporarily concatenates short clips from the same take/family until they reach the minimum duration required for stable AI inference (5s), while recording every source boundary. After processing, the merged result is split back into one output per original clip, preserving each clip's name, duration, and BWF timecode.
-
-### Timecode & delivery
-* **BWF Timecode preservation** — Reads the original Broadcast Wave `time_reference` metadata and re-injects it into the final processed file via `ffmpeg`, so the output stays perfectly aligned on your editing timeline.
-* **Template-driven Pro Tools delivery** — The local interface can turn the WAV files currently stored in `work/processed` into a self-contained Pro Tools delivery: one `.ptx` session plus an `Audio Files` folder, wrapped in a downloadable ZIP. Placement uses each file's BWF timestamp, so it is sample-accurate rather than clip-relative.
-* **Deterministic track routing** — Processed filenames must follow `<family>-Gain_<number>_PFX_Ready.wav`. Files are sorted alphabetically; the first family is routed to `PFX 01`, the second to `PFX 02`, and a third family is rejected explicitly. Same-track overlaps are preserved, including one-sample boundary overlaps.
-* **Smart Cache & Fallback** — Silent/empty clips are automatically skipped rather than crashing the batch; if the AI separator fails on a given file, the pipeline falls back to passing the clip through unprocessed rather than losing it.
-* **Compute cost tracking** — Prints an estimated Compute Units cost at the end of each Colab session.
-
-### Local interface (Drive Bridge)
-* **Lightweight Gradio UI** (`app_local.py`) — Drop raw `.wav` files, upload to Drive, open the Colab notebook, download the finished WAV files, and create the Pro Tools delivery, all from a local browser tab.
-* **One-click cache clearing** — Wipes both local working files and the corresponding Drive folders, with an explicit confirmation step before anything is deleted.
-* **Configurable Colab link** — Point the "Open Google Colab" button at a new notebook version at any time via the "⚙️ Advanced Settings" panel, without touching code.
-
----
-
-## 🏗️ Architecture
-
-1. **Local interface (Gradio)** — `app_local.py` runs on your machine. You drop raw files in; `drive_auth.py` handles Google Drive authentication and syncs them up.
-2. **Cloud backend (Colab)** — `Colab_Backend_PFX_V3_1_2.ipynb` runs on Google's GPU servers. It downloads the raw files, aligns/merges/denoises them, runs the dual AI separation + YAMNet multi-mask pipeline, and uploads the finished PFX tracks back to Drive.
-3. **Retrieval and Pro Tools assembly** — One frontend action downloads the processed WAV files from Drive without creating an intermediate WAV archive. `protools_export.py` then applies PFX Extractor's filename sorting and track-routing policy and calls the generic `pt_api` 1.3.8+ template builder. The browser receives a single ZIP containing the `.ptx` session and its `Audio Files` folder. A local `template.ptx` at the repository root is used by default; an alternate compatible template can be selected in Advanced Settings.
-
----
-
-## 🚀 Installation & Requirements
-
-### 1. Requirements
-* Python 3.10+
-* Git, used by `pip` to install the pinned `pt_api` dependency from GitHub.
-* A Google account with access to Google Drive and Google Colaboratory.
-
-### 2. Local dependencies
-Clone this repository, then install the local interface's dependencies:
-```bash
-pip install -r requirements.txt
+```text
+Raw WAV files → local Drive Bridge → Google Drive → Google Colab GPU
+→ processed BWF WAV files → Pro Tools session (.ptx + Audio Files ZIP)
 ```
 
-`requirements.txt` installs the validated `pt_api` release directly from the immutable Git tag `v1.3.8`. PFX Extractor resolves the runtime in this order: `PT_API_PATH`, the installed `pt_api` module, then a sibling repository named `pt_api` next to this repository. The final option remains a development fallback; normal installations use the pinned package.
+The desktop interface is intentionally simple. It uploads files, opens the configured Colab notebook, retrieves processed files, and builds the Pro Tools delivery. The audio processing itself runs in Colab; no GPU is required locally.
 
-After pulling a revision that changes `requirements.txt` into an existing virtual environment, update it once with:
+> The UI, code comments and Colab notebooks are in French. This README is in English for broader technical reference.
+
+## Current backend choices
+
+| Notebook | Status | Use it when |
+| --- | --- | --- |
+| `Colab_Backend_PFX_V3_1_2.ipynb` | Stable baseline | You need the most established workflow. |
+| `Colab_Backend_PFX_V3_2_0.ipynb` | Listening-tested experiment | You want stronger treatment of sighs, whispers and breathing. |
+| `Colab_Backend_PFX_V3_3_0.ipynb` | Current experiment | You also want more mouth-noise reduction and a guarded bodytalk lift. Validate it on representative material before standardizing it. |
+
+The **Open Google Colab** button opens the URL saved in `colab_link.txt`. Use **Advanced Settings** in the local interface to change it to the notebook you intend to run.
+
+V3.3.0 adds two independent controls:
+
+- `DUCK_DEPTH_BOUCHE` — contextual attenuation for mouth noise. Its default is 95%.
+- `GAIN_BODYTALK_DB` — up to +2 dB on YAMNet proxies for clothing movement and rubbing, automatically blocked by human and ambience evidence.
+
+See [the V3.3.0 trial guide](ESSAI_V3_3_0.md) before relying on those settings in production. Its mouth and bodytalk detection is temporal, not clip-wide, but remains classification-based: some wanted effects may be reduced and some unwanted sounds may remain.
+
+## What it does
+
+- **Dual source separation:** blends BS-RoFormer and MDX23C instrumental stems. The default blend favors RoFormer (60%) to reduce vocal residue while limiting artifacts.
+- **YAMNet event routing:** analyses the untouched merged audio before denoise and separation. All 521 AudioSet classes are explicitly assigned to non-overlapping PFX, human, ambience, outside-PFX, contextual or excluded roles.
+- **Time-based masks:** applies soft thresholds and attack/release envelopes per event type—not a single decision for a whole clip. Masks are cached at YAMNet resolution and interpolated in blocks for long recordings.
+- **PFX protection:** reduces the effect of denoise and removal masks around physical on-set events. It is intentionally capped: protection never restores the full raw signal.
+- **Boom/Lav alignment:** when both are supplied, filenames containing `BOOM` and `LAV` are naturally sorted and paired by position. Their internal sequence numbers do not need to match; the two lists must contain the same number of files.
+- **Short-clip handling:** clips are temporarily merged by family for stable inference, then split back to their original durations, names and BWF timecode.
+- **Pro Tools delivery:** downloads the processed files and builds one self-contained ZIP containing a `.ptx` session and its `Audio Files` folder. Placement comes from each output file's BWF timestamp.
+
+## Requirements
+
+- Windows 10 or 11, Python 3.10 or newer, and Git.
+- A Google account with Google Drive and Google Colab access.
+- A Google Cloud OAuth **Desktop app** credential for the local Drive Bridge.
+- Internet access for Drive, Colab, TensorFlow Hub and model downloads.
+- For Pro Tools delivery: a compatible local `template.ptx` file. It is proprietary and is deliberately not included in this repository.
+
+The tested Pro Tools workflow is **mono, 48 kHz, 23.976 fps**, with two uniquely named tracks: `PFX 01` and `PFX 02`.
+
+## Installation
+
+1. Clone the repository and open its folder.
+
+   ```powershell
+   git clone https://github.com/sebedard-creator/PFX-Extractor.git
+   cd PFX-Extractor
+   ```
+
+2. Put your Google OAuth Desktop-app client file at the project root as `credentials.json`.
+
+3. If you need Pro Tools export, put the separately supplied native session template at the root as `template.ptx`.
+
+4. Run `start.bat`. On the first run it creates `.venv` and installs [requirements.txt](requirements.txt).
+
+5. Open [http://127.0.0.1:7862](http://127.0.0.1:7862) in a browser if it does not open automatically. The first action requiring Drive opens the Google OAuth consent flow and creates a local `token.json`.
+
+For a pre-existing virtual environment, install updated dependencies explicitly after pulling changes:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Place a compatible native Pro Tools template at the repository root as `template.ptx`. This proprietary file is intentionally excluded by `.gitignore` and must be provisioned separately on every installation that needs PTX export. The validated local template is an empty mono 48 kHz / 23.976 fps session with uniquely named `PFX 01` and `PFX 02` tracks and the imported-media prototype required by `pt_api`.
+`PFXExtractor_start_hidden.vbs` starts the already-installed interface in the background. Its logs are written below `work\`.
 
-### 3. Google API credentials (OAuth)
-For the local app to write to your Google Drive:
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create OAuth 2.0 credentials (type "Desktop app").
-3. Download the file, rename it `credentials.json`, and place it at the root of this project.
+### Google OAuth setup
+
+Create OAuth 2.0 credentials of type **Desktop app** in the [Google Cloud Console](https://console.cloud.google.com/), download the JSON file and rename it `credentials.json`.
+
+The Drive Bridge requests full Google Drive access because Colab writes the processed files outside the local application's own upload operation. Treat `credentials.json` and `token.json` as private credentials. Both are excluded from Git.
+
+## Standard workflow
+
+1. Start the local interface and drop the raw `.wav` files.
+2. Click **Upload vers Google Drive**. Files are copied locally, then uploaded to `PFX_Extractor/1_Bruts_vers_Colab` on Drive.
+3. Click **Ouvrir Google Colab** and run the selected notebook's cells in order. Do not run two notebook versions simultaneously against the same Drive folders.
+4. After Colab completes, click **Télécharger les fichiers traités en ZIP**. The interface downloads Drive outputs, builds the Pro Tools session, and downloads a ZIP with this layout:
+
+   ```text
+   <session name>/
+   ├── <session name>.ptx
+   └── Audio Files/
+       └── *.wav
+   ```
+
+5. Extract the ZIP before opening the `.ptx` file in Pro Tools.
+6. After confirming the delivery, use **Effacer la cache** to remove temporary local files, generated deliveries and the two Drive working folders. This action asks for confirmation.
+
+### Input and output conventions
+
+- The intended production workflow uses **mono 48 kHz BWF WAV** files. Preserve BWF timestamps in source material whenever timeline placement matters.
+- If a batch contains both microphone families, use `BOOM` and `LAV` somewhere in the filenames. The backend accepts a single family; when both exist their counts must match.
+- The backend creates processed names in the form `<family>-Gain_<number>_PFX_Ready.wav`.
+- For the Pro Tools export, files are sorted alphabetically. The first discovered family maps to `PFX 01`; the second maps to `PFX 02`. A third family is rejected rather than silently losing material.
+- BWF timestamp overlaps on a track are intentionally retained. They are not mixed or dropped by the export builder.
+
+## Colab controls
+
+The notebook's first control cell is the supported place to tune processing. Start with the defaults and adjust only after listening to a representative batch—not a single clip.
+
+| Control | Default | Purpose |
+| --- | ---: | --- |
+| `NIVEAU_DENOISE_POURCENTAGE` | 58% | Strength of the adaptive pre-denoise pass. |
+| `DENOISE_ADAPTATIF` | On | Uses a changing noise profile; usually better for exterior and variable noise. |
+| `RATIO_ROFORMER` | 0.60 | RoFormer proportion in the dual-model blend. |
+| `AI_OVERLAP` | 12 | Higher overlap may reduce pumping, at a GPU-time cost. |
+| `DUCK_DEPTH_HUMAIN` | 75% | General human-sound attenuation. |
+| `DUCK_DEPTH_SOUFFLES` | 95% | V3.2+/V3.3+ priority treatment for whispering, sighs and breathing. |
+| `DUCK_DEPTH_BOUCHE` | 95% | V3.3 only: contextual mouth-noise attenuation. |
+| `GAIN_BODYTALK_DB` | +2 dB | V3.3 only: guarded lift for bodytalk proxies; set to 0 dB to disable. |
+| `DUCK_DEPTH_AMBIANCE` | 70% | Ambience, weather, traffic, room tone and hum attenuation. |
+| `DUCK_DEPTH_HORS_PFX` | 85% | Music, TV/radio, vehicles, sirens and similar content attenuation. |
+| `PROTECTION_PFX` | 70% | Local protection of PFX evidence during denoise and masking. |
+
+V3.3.0 returns to V3.2.0 audio behavior when both `DUCK_DEPTH_BOUCHE` is set to 0% and `GAIN_BODYTALK_DB` to 0 dB.
+
+## Pro Tools delivery
+
+The local export uses [pt_api](https://github.com/sebedard-creator/pt_api), pinned in [requirements.txt](requirements.txt) to the validated `v1.3.8` tag.
+
+A compatible `template.ptx` must be supplied locally. The validated template is an empty mono 48 kHz / 23.976 fps Pro Tools session with `PFX 01` and `PFX 02` tracks plus the media prototype required by `pt_api`. The template is ignored by Git because it is proprietary.
+
+Exports are transactional: if building the session fails, no incomplete ZIP is published. The already-downloaded WAV files remain in `work/processed` for diagnosis. Existing delivery archives are not overwritten.
+
+The complete PTX workflow was validated on a real 62-file BWF batch: media hashes, timestamps, durations, placements and ZIP integrity were verified; the session then opened, played, saved, closed and reopened in Pro Tools without warning.
+
+## Troubleshooting
+
+| Situation | What to check |
+| --- | --- |
+| Drive authentication fails | Confirm that `credentials.json` is at the project root. Delete `token.json` only if you intentionally need to authorize again. |
+| The interface starts but is not visible | Browse to [http://127.0.0.1:7862](http://127.0.0.1:7862). Review `work/app.log` and `work/server.log` if you used the hidden launcher. |
+| Colab fails before the batch begins | Re-run its model preflight cell and inspect the reported missing resource. V3.1.2+ performs preflight before it purges temporary audio work. |
+| No processed files are found | Confirm that the Colab run completed and that `PFX_Extractor/2_Environnements_IA` in the same Google Drive account contains the outputs. |
+| PTX export is rejected | Verify the local `template.ptx`, mono 48 kHz/23.976 compatibility, BWF metadata and the processed filename convention. |
+| Two microphone lists refuse to pair | Check that both family tokens are present and that the number of `BOOM` and `LAV` files is identical. |
+
+## Project layout
+
+| Path | Role |
+| --- | --- |
+| `app_local.py` | Local Gradio Drive Bridge. |
+| `drive_auth.py` | OAuth authentication, Drive transfers and cache cleanup. |
+| `protools_export.py` | PFX filename routing and transactional PTX delivery orchestration. |
+| `Colab_Backend_PFX_V*.ipynb` | GPU processing backends. |
+| `ESSAI_V3_2_0.md`, `ESSAI_V3_3_0.md` | Trial-specific controls, risks and listening protocol. |
+| `architecture.md` | Detailed technical architecture and delivery contract. |
+| `changelog.md` | Historical changes. |
+| `work/` | Local runtime cache, logs, downloaded WAV files and generated deliveries. Ignored by Git. |
+| `template.ptx` | Local proprietary Pro Tools template. Ignored by Git. |
+
+## Limitations
+
+PFX Extractor is an assistive restoration workflow, not a perfect source-isolation system.
+
+- A detected human sound can overlap desired clothing or prop detail; stronger removal can reduce both.
+- A wanted effect can be misclassified, and an unwanted sound can remain undetected.
+- V3.3.0’s bodytalk control raises detected portions of the already processed mix; it cannot restore detail removed earlier in source separation.
+- Pro Tools delivery currently supports a maximum of two filename families/tracks.
+- The Colab backend, GPU availability, third-party model hosting and Google services are external dependencies. Retain your original recordings and evaluate a trial batch before processing a whole production.
+
+## Documentation
+
+- [Architecture](architecture.md)
+- [Changelog](changelog.md)
+- [V3.2.0 trial notes](ESSAI_V3_2_0.md)
+- [V3.3.0 trial notes](ESSAI_V3_3_0.md)
+- [pt_api](https://github.com/sebedard-creator/pt_api)
+
+## License and attribution
+
+Copyright © 2026 sebedard-creator.
+
+This project is licensed under the [Attribution Assurance License](LICENSE). Use, modification and redistribution are permitted under its conditions. A redistributed executable program—or a program dependent on it—must visibly show this attribution at launch:
+
+> PFX Extractor by sebedard-creator — https://github.com/sebedard-creator/PFX-Extractor
+
+The attribution requirement does not grant permission to imply endorsement by sebedard-creator.
 
 ---
 
-## 📖 How to Use
-
-1. **Start the local interface** — Double-click `start.bat` (or run `python app_local.py`). The interface opens in your browser.
-2. **Send your files** — Drop your `.wav` tracks in the interface and click "Upload vers Google Drive".
-3. **Run the AI processing** — Click "Ouvrir Google Colab". In Colab, adjust the parameters in the control panel cell if needed, then run every cell in `Colab_Backend_PFX_V3_0.ipynb` in order.
-4. **Retrieve the Pro Tools result** — Once Colab finishes, go back to the local interface and click "Télécharger les fichiers traités en ZIP". This single action downloads the WAV files from Drive, creates the Pro Tools session, and downloads the final ZIP. The default template routes the first filename family to `PFX 01` and a second family to `PFX 02`; Advanced Settings can override the template or session name. Unpack the returned ZIP before opening its `.ptx` file.
-5. **Clean up** — Use the red "Effacer la cache" button to clear your Drive and local working folders, generated Pro Tools deliveries, and prepare the next session.
-
-The validated local template and builder currently target mono, 48 kHz, 23.976 fps sessions. Input WAV files must be mono 48 kHz, 32-bit float WAVE_EXTENSIBLE files with valid BWF metadata and must respect the format limits documented by `pt_api`. Export is transactional: an error does not publish an incomplete delivery.
-
----
-
-## 🎛️ Colab Control Panel Reference
-
-All processing parameters live in a single control-panel cell at the top of the notebook — nothing else needs to be edited by hand.
-
-| Parameter | Default | What it does |
-|---|---|---|
-| `NIVEAU_DENOISE_POURCENTAGE` | 58% | Strength of the pre-denoise pass applied before AI separation. |
-| `DENOISE_ADAPTATIF` | On | Adaptive (non-stationary) vs. stationary noise profile — adaptive is more robust on noisy/variable exterior scenes. |
-| `RATIO_ROFORMER` | 0.60 | Blend weight between RoFormer and MDX23C outputs. |
-| `AI_OVERLAP` | 12 | Overlap between AI inference segments — higher values smooth the separation mask over time (less pumping, more GPU time). |
-| `DUCK_DEPTH_HUMAIN` | 75% | Strength of human-sound removal (speech, vocalizations, breathing, physiological sounds, applause). |
-| `DUCK_DEPTH_AMBIANCE` | 70% | Strength of ambience removal (nature/weather, traffic, roomtone-like noise, static, hum). |
-| `DUCK_DEPTH_HORS_PFX` | 85% | Strength of non-PFX content removal (music, TV/radio, vehicles, sirens, low-frequency/vibration classes). |
-| `PROTECTION_PFX` | 70% | Local protection of footsteps, cloth, props, manipulations, impacts, and tools; capped at 90%. |
-
-### V3.0 default-profile rationale
-
-The defaults are deliberately strong enough to create a useful PFX stem without turning the masks into hard gates. At full mask confidence and without overlapping PFX protection, they yield approximately **−12.0 dB** for human content, **−10.5 dB** for ambience, and **−16.5 dB** for outside-PFX content. With a full PFX-protection event, the corresponding reductions relax to roughly **−7.3 dB**, **−2.9 dB**, and **−6.4 dB**, preserving physical transients.
-
-Recommended starting ranges are 70–80% human, 60–75% ambience, 80–90% outside-PFX, and 60–75% PFX protection. `NIVEAU_DENOISE_POURCENTAGE=58`, adaptive denoise, `RATIO_ROFORMER=0.60`, and `AI_OVERLAP=12` remain the balanced defaults; final tuning should be based on a representative production-sound batch rather than a single clip.
-
----
-
-## 🧠 What's New
-
-**V3.0**
-* Replaced YAMNet keyword matching and raw-max ducking with an exact 521-class partition, separate thresholded masks, contextual animal/tone handling, and block-based PFX protection.
-* Added independent controls for human, ambience, and outside-PFX removal, plus capped PFX restoration.
-* Hardened separator parameter validation, lag conventions, sample-rate handling, and Snowball re-splitting/timecode delivery.
-* Added self-contained Pro Tools session delivery from processed BWF files through the generic `pt_api` 1.3.8+ template builder.
-* Validated the complete Pro Tools path on a real 62-file batch: generation, native opening, playback, Save As, closing, and reopening all succeeded without warning.
-
-**V2.1**
-* Added a normalized-confidence safeguard to the auto-alignment step, preventing unrelated clips from being corrupted by a forced (meaningless) time-shift.
-* Removed the A/B comparison-file generation feature — each clip now produces a single `_PFX_Ready.wav` output.
-
-**V2.0**
-* Replaced the V1.x sidechain (which relied on the AI separator's own discarded "Vocals" stem — a dead end, since the models detect essentially no vocal content on non-lexical sounds like sighs) with an independent YAMNet-based sound-event detector.
-* Added bodytalk protection during denoise, driven by the same detector.
-* Added `DENOISE_ADAPTATIF` and increased default `AI_OVERLAP` to reduce pumping artifacts on noisy exterior scenes.
-* Retired the local `dsp_local.py` DSP module — all processing is now centralized in the Colab notebook.
-
----
-*PFX Extractor v3.0 - 2026*
-*Designed by Sébastien Bédard*
+Designed by Sébastien Bédard.
