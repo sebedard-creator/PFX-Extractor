@@ -1,7 +1,7 @@
 import unittest
 import warnings
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 warnings.filterwarnings(
     "ignore",
@@ -44,7 +44,7 @@ class CombinedDownloadTests(unittest.TestCase):
             "A144_PFX",
         )
 
-        download_processed_files.assert_called_once_with()
+        download_processed_files.assert_called_once_with(progress=ANY)
         create_protools_delivery.assert_called_once_with(
             processed_dir=app_local.drive_auth.PROCESSED_DIR,
             exports_dir=app_local.drive_auth.EXPORTS_DIR,

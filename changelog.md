@@ -1,5 +1,10 @@
 # Changelog - PFX Extractor
 
+## Unreleased
+### Local Drive Bridge — transfert vers Pro Tools
+- Correctif : l'objet de progression Gradio n'est plus évalué comme un booléen pendant les uploads, téléchargements ou effacements Drive. Sur certains callbacks, cette évaluation appelait `__len__` sur une liste vide et interrompait le téléchargement avec `list index out of range` avant la création PTX.
+- Couverture ajoutée : simulation de ce comportement Gradio, téléchargement Drive de bout en bout avec progression, et mise à jour du test d'intégration du bouton de livraison.
+
 ## 2026-09-22
 ### Backend V3.3.0 — essai bruits de bouche et gain bodytalk
 - Nouveau notebook autonome `Colab_Backend_PFX_V3_3_0.ipynb`; V3.2.0 et V3.1.2 conservées intactes.

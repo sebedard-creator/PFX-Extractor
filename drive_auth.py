@@ -174,6 +174,17 @@ def _list_files_in_folder(service, folder_id):
             return files
 
 
+def _report_progress(progress, value, description):
+    """Informe Gradio sans évaluer son objet Progress comme un booléen.
+
+    Certaines versions de Gradio évaluent ``bool(progress)`` via ``__len__``.
+    Pendant un callback, cette liste peut être vide et lever IndexError. Une
+    présence explicite est donc la seule vérification sûre ici.
+    """
+    if progress is not None:
+        progress(value, desc=description)
+
+
 def upload_files(filepaths, progress=None):
     if not filepaths:
         return {"count": 0, "names": [], "failed": []}
@@ -190,8 +201,11 @@ def upload_files(filepaths, progress=None):
             failed.append(f"{path}: fichier introuvable")
             continue
 
-        if progress:
-            progress((index - 1) / max(total, 1), desc=f"Upload {index}/{total}: {path.name}")
+        _report_progress(
+            progress,
+            (index - 1) / max(total, 1),
+            f"Upload {index}/{total}: {path.name}",
+        )
 
         metadata = {"name": path.name, "parents": [raw_folder_id]}
         media = MediaFileUpload(str(path), mimetype="audio/wav", resumable=True)
@@ -201,8 +215,7 @@ def upload_files(filepaths, progress=None):
         except Exception as exc:
             failed.append(f"{path.name}: {exc}")
 
-    if progress:
-        progress(1.0, desc="Upload termine")
+    _report_progress(progress, 1.0, "Upload termine")
 
     return {"count": len(uploaded_names), "names": uploaded_names, "failed": failed}
 
@@ -223,8 +236,11 @@ def download_processed_files(progress=None):
 
     for index, item in enumerate(files, start=1):
         destination = _unique_path(PROCESSED_DIR, item["name"])
-        if progress:
-            progress((index - 1) / max(total, 1), desc=f"Download {index}/{total}: {item['name']}")
+        _report_progress(
+            progress,
+            (index - 1) / max(total, 1),
+            f"Download {index}/{total}: {item['name']}",
+        )
 
         request = service.files().get_media(fileId=item["id"])
         with io.FileIO(destination, "wb") as handle:
@@ -235,8 +251,7 @@ def download_processed_files(progress=None):
 
         downloaded_paths.append(destination)
 
-    if progress:
-        progress(1.0, desc="Fichiers traites telecharges")
+    _report_progress(progress, 1.0, "Fichiers traites telecharges")
 
     return downloaded_paths, {
         "count": len(downloaded_paths),
@@ -290,13 +305,13 @@ def clear_drive_cache(progress=None):
         files = _list_files_in_folder(service, folder_id)
         total = len(files)
         for file_index, item in enumerate(files, start=1):
-            if progress:
-                base = (folder_index - 1) / len(folders)
-                span = 1 / len(folders)
-                progress(
-                    base + (file_index - 1) / max(total, 1) * span,
-                    desc=f"Effacement Drive {folder_name}: {file_index}/{total}",
-                )
+            base = (folder_index - 1) / len(folders)
+            span = 1 / len(folders)
+            _report_progress(
+                progress,
+                base + (file_index - 1) / max(total, 1) * span,
+                f"Effacement Drive {folder_name}: {file_index}/{total}",
+            )
             try:
                 service.files().delete(
                     fileId=item["id"],
@@ -308,8 +323,7 @@ def clear_drive_cache(progress=None):
             except Exception as exc:
                 failed.append(f"{folder_name}/{item.get('name', item['id'])}: {exc}")
 
-    if progress:
-        progress(1.0, desc="Cache effacee")
+    _report_progress(progress, 1.0, "Cache effacee")
 
     return {"deleted": deleted, "failed": failed}
 
