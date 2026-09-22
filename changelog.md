@@ -1,5 +1,18 @@
 # Changelog - PFX Extractor
 
+## 2026-09-22
+### Backend V3.3.0 — essai bruits de bouche et gain bodytalk
+- Nouveau notebook autonome `Colab_Backend_PFX_V3_3_0.ipynb`; V3.2.0 et V3.1.2 conservées intactes.
+- Retrait buccal prioritaire à 95 % : indices buccaux directs et clics/smacks/pops uniquement avec contexte humain proche, marge temporelle pour les amorces de phrase.
+- Gain bodytalk jusqu'à +2 dB, freiné par les indices indésirables et limité par la marge avant saturation; pas de restauration brute supplémentaire ni de boost explicite des footsteps.
+- Deux contrôles indépendants; tous deux à zéro rendent le traitement V3.2.0. Partition YAMNet, séparation, fichiers/timecodes et frontend/PTX inchangés.
+- Tests DSP synthétiques reproductibles dans `tests/test_backend_v330.py`; limites et protocole d'écoute dans `ESSAI_V3_3_0.md`. Validation auditive Colab encore requise.
+
+## 2026-09-10
+### Backend V3.2.0 — essai souffles et chuchotements
+- Masque prioritaire Whispering / Sigh / Breathing, seuil 0,10–0,30 et retrait à 95 % sans veto PFX. Notebook et guide `ESSAI_V3_2_0.md` séparés de V3.1.2.
+- Amélioration à l'écoute rapportée par l'utilisateur le 22 septembre; bruits de bouche résiduels motivant l'essai V3.3.0.
+
 ## 2026-08-17
 ### Backend Colab V3.1.2 — fiabilité de préparation et appariement des microphones
 - **Prévol et cache persistant des modèles** — MDX23C, BS-RoFormer et leurs YAML sont validés avant toute purge ou analyse audio, puis conservés dans `PFX_Extractor/0_Model_Cache` sur Drive. Une ressource indisponible échoue donc immédiatement, et non après le calcul du batch.

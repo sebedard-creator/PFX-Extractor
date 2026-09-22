@@ -1,5 +1,9 @@
 # 🎙️ PFX Extractor - Drive Bridge
 
+## Experimental backend V3.3.0
+
+`Colab_Backend_PFX_V3_3_0.ipynb` adds contextual mouth-noise attenuation (95% default) and a guarded bodytalk boost (up to +2 dB default), retaining the V3.2.0 breath/whisper improvements. Both earlier notebooks remain available. Set mouth attenuation to 0% and bodytalk gain to 0 dB to recover V3.2.0 audio behavior. These are experimental classifiers, not isolated mouth/clothing stems; listening validation is required. See [V3.3.0 trial guide](ESSAI_V3_3_0.md) for controls, limitations and comparison instructions. Frontend/PTX delivery is unchanged.
+
 > **Language note:** This README is written in English, but the codebase itself — all inline comments, variable/function names, print statements, and the Colab notebook's documentation — is written in French.
 
 **PFX Extractor** is a hybrid (local + cloud GPU) toolchain for audio post-production professionals. It creates a production-FX stem from raw location recordings: synchronized physical sounds such as footsteps, clothing, props, manipulations, and impacts are preserved, while human sounds, roomtone, exterior traffic, weather, music, and other ambience are reduced.

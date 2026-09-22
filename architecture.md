@@ -1,5 +1,9 @@
 # ARCHITECTURE TECHNIQUE (PFX-EXTRACTOR v3.0)
 
+## Extension expérimentale backend V3.3.0 (2026-09-22)
+
+Le notebook `Colab_Backend_PFX_V3_3_0.ipynb` prolonge l'essai V3.2.0 sans modifier les contrats Drive/WAV/BWF/PTX ni la partition des 521 classes. L'analyse brute fournit trois masques additionnels : bouche (indices directs ou transitoires avec contexte humain), bodytalk (zipper/rub/crumpling/rustle), garde humaine sensible. Le mix final applique le maximum des retraits, puis un gain bodytalk jusqu'à +2 dB pondéré par un veto humain/ambiant, avec marge conservatrice avant saturation. Aucune restauration brute additionnelle. Les paramètres et limitations temporelles sont détaillés dans `ESSAI_V3_3_0.md`. Les versions précédentes restent disponibles; le reste de ce document décrit le socle historique.
+
 ## 1. VUE D'ENSEMBLE DU SYSTÈME
 PFX-EXTRACTOR est une application hybride composée d'une interface locale de gestion de fichiers (le "Drive Bridge" en Gradio) et d'un moteur de traitement audio puissant propulsé par un backend Google Colab. L'application facilite la création d'une piste Production FX à partir de fichiers de tournage : elle conserve les effets synchrones de plateau (pas, vêtements, manipulations, props, impacts) tout en retirant les humains, les ambiances et le contenu éditorial hors PFX. Le backend combine des modèles de **séparation de source** (BS-RoFormer, MDX23C) et un modèle de **détection d'événements sonores** (YAMNet).
 

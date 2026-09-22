@@ -1,5 +1,15 @@
 # Handoff - PFX Extractor
 
+## Date de session : 2026-09-22 — essai V3.3.0
+
+- L'utilisateur confirme une amélioration avec V3.2.0; demande moins de becs/smacks et un peu plus de bodytalk.
+- Nouveau notebook `Colab_Backend_PFX_V3_3_0.ipynb` : retrait buccal prioritaire 95 %, gain bodytalk maximal +2 dB avec veto humain/ambiant et marge avant saturation. Voir `ESSAI_V3_3_0.md` pour tous les seuils, limitations et procédure A/B.
+- V3.2.0 et V3.1.2 intactes, aucun changement frontend/API. Les nouveaux contrôles à zéro retrouvent le traitement V3.2.0, testé bit-identique.
+- Tests synthétiques reproductibles : `tests/test_backend_v330.py`. Ne pas confondre réussite des tests avec validation perceptive : premier essai Colab V3.3.0 encore à faire.
+- Résultat : 11/11 tests V3.3.0, 19/20 sur la suite complète. Échec préexistant du test frontend `test_download_builds_and_returns_protools_delivery` : il attend un appel sans argument, le code passe `progress=...`. `app_local.py` et son test sont inchangés depuis HEAD; correction hors de cet essai.
+
+---
+
 ## Date de session : 2026-07-17 — V3.0
 
 ### Ce qui a été accompli
