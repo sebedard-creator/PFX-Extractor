@@ -13,22 +13,15 @@ The desktop interface is intentionally simple. It uploads files, opens the confi
 
 > The UI, code comments and Colab notebooks are in French. This README is in English for broader technical reference.
 
-## Current backend choices
+## Current version
 
-| Notebook | Status | Use it when |
-| --- | --- | --- |
-| `Colab_Backend_PFX_V3_1_2.ipynb` | Stable baseline | You need the most established workflow. |
-| `Colab_Backend_PFX_V3_2_0.ipynb` | Listening-tested experiment | You want stronger treatment of sighs, whispers and breathing. |
-| `Colab_Backend_PFX_V3_3_0.ipynb` | Current experiment | You also want more mouth-noise reduction and a guarded bodytalk lift. Validate it on representative material before standardizing it. |
+**V3.5.1** is the current backend: [Colab_Backend_PFX_V3_5_1.ipynb](Colab_Backend_PFX_V3_5_1.ipynb). Earlier changes are recorded in [changelog.md](changelog.md); the working folder contains only the current notebook.
 
 The **Open Google Colab** button opens the URL saved in `colab_link.txt`. Use **Advanced Settings** in the local interface to change it to the notebook you intend to run.
 
-V3.3.0 adds two independent controls:
+The backend combines priority respiratory treatment, contextual mouth-noise attenuation and a residual-human analysis of the cleaned mix. That analysis merges native-level scores with scores from locally amplified copies (up to +18 dB by default), then applies one residual removal mask. The amplification is reserved for detection.
 
-- `DUCK_DEPTH_BOUCHE` — contextual attenuation for mouth noise. Its default is 95%.
-- `GAIN_BODYTALK_DB` — up to +2 dB on YAMNet proxies for clothing movement and rubbing, automatically blocked by human and ambience evidence.
-
-See [the V3.3.0 trial guide](ESSAI_V3_3_0.md) before relying on those settings in production. Its mouth and bodytalk detection is temporal, not clip-wide, but remains classification-based: some wanted effects may be reduced and some unwanted sounds may remain.
+V3.5.1 increases the maximum clothing-movement lift from +2 to **+3.5 dB**. Zipper, rubbing, crumpling and rustling trigger this control; footsteps and taps do not. Human/ambience guards and peak headroom may reduce the actual gain. All these controls are temporal. Human finishing remains necessary, as detection can miss unwanted sounds or attenuate wanted effects.
 
 ## What it does
 
@@ -85,7 +78,7 @@ The Drive Bridge requests full Google Drive access because Colab writes the proc
 
 1. Start the local interface and drop the raw `.wav` files.
 2. Click **Upload vers Google Drive**. Files are copied locally, then uploaded to `PFX_Extractor/1_Bruts_vers_Colab` on Drive.
-3. Click **Ouvrir Google Colab** and run the selected notebook's cells in order. Do not run two notebook versions simultaneously against the same Drive folders.
+3. Click **Ouvrir Google Colab** and run the current notebook's cells in order. Do not run two processing sessions simultaneously against the same Drive folders.
 4. After Colab completes, click **Télécharger les fichiers traités en ZIP**. The interface downloads Drive outputs, builds the Pro Tools session, and downloads a ZIP with this layout:
 
    ```text
@@ -117,14 +110,17 @@ The notebook's first control cell is the supported place to tune processing. Sta
 | `RATIO_ROFORMER` | 0.60 | RoFormer proportion in the dual-model blend. |
 | `AI_OVERLAP` | 12 | Higher overlap may reduce pumping, at a GPU-time cost. |
 | `DUCK_DEPTH_HUMAIN` | 75% | General human-sound attenuation. |
-| `DUCK_DEPTH_SOUFFLES` | 95% | V3.2+/V3.3+ priority treatment for whispering, sighs and breathing. |
-| `DUCK_DEPTH_BOUCHE` | 95% | V3.3 only: contextual mouth-noise attenuation. |
-| `GAIN_BODYTALK_DB` | +2 dB | V3.3 only: guarded lift for bodytalk proxies; set to 0 dB to disable. |
+| `DUCK_DEPTH_SOUFFLES` | 95% | Priority treatment for whispering, sighs and breathing. |
+| `PROFIL_RESPIRATOIRE_RENFORCE` | On | Includes sniffs, snorts, gasps and panting; strengthens intermediate detections. |
+| `DUCK_DEPTH_RESIDUS` | 90% | Up to −20 dB additional attenuation on human residues in the already-cleaned mix. 0% skips residual analysis entirely. |
+| `GAIN_ANALYSE_RESIDUS_DB` | +18 dB | Maximum local gain for residual detection only, peak-limited per window. 0 dB uses only native-level scores. |
+| `DUCK_DEPTH_BOUCHE` | 95% | Contextual mouth-noise attenuation. |
+| `GAIN_BODYTALK_DB` | +3.5 dB | Guarded lift for clothing-movement proxies; set to 0 dB to disable or 2 dB for the previous gain. |
 | `DUCK_DEPTH_AMBIANCE` | 70% | Ambience, weather, traffic, room tone and hum attenuation. |
 | `DUCK_DEPTH_HORS_PFX` | 85% | Music, TV/radio, vehicles, sirens and similar content attenuation. |
 | `PROTECTION_PFX` | 70% | Local protection of PFX evidence during denoise and masking. |
 
-V3.3.0 returns to V3.2.0 audio behavior when both `DUCK_DEPTH_BOUCHE` is set to 0% and `GAIN_BODYTALK_DB` to 0 dB.
+Respiratory and residual removal can accumulate: maximal masks at the defaults produce about −46 dB of combined gain, in addition to separation and denoise. This applies locally where detected, not uniformly to the clip. Residual detection adds short YAMNet calls but does not rerun the separators. The control value is a maximum: masks, guards and available headroom determine the actual clothing lift.
 
 ## Pro Tools delivery
 
@@ -154,8 +150,7 @@ The complete PTX workflow was validated on a real 62-file BWF batch: media hashe
 | `app_local.py` | Local Gradio Drive Bridge. |
 | `drive_auth.py` | OAuth authentication, Drive transfers and cache cleanup. |
 | `protools_export.py` | PFX filename routing and transactional PTX delivery orchestration. |
-| `Colab_Backend_PFX_V*.ipynb` | GPU processing backends. |
-| `ESSAI_V3_2_0.md`, `ESSAI_V3_3_0.md` | Trial-specific controls, risks and listening protocol. |
+| `Colab_Backend_PFX_V3_5_1.ipynb` | Current GPU processing backend. |
 | `architecture.md` | Detailed technical architecture and delivery contract. |
 | `changelog.md` | Historical changes. |
 | `work/` | Local runtime cache, logs, downloaded WAV files and generated deliveries. Ignored by Git. |
@@ -167,7 +162,7 @@ PFX Extractor is an assistive restoration workflow, not a perfect source-isolati
 
 - A detected human sound can overlap desired clothing or prop detail; stronger removal can reduce both.
 - A wanted effect can be misclassified, and an unwanted sound can remain undetected.
-- V3.3.0’s bodytalk control raises detected portions of the already processed mix; it cannot restore detail removed earlier in source separation.
+- The bodytalk control raises detected portions of the already processed mix; simultaneous sounds may also rise. It cannot restore detail removed earlier in source separation.
 - Pro Tools delivery currently supports a maximum of two filename families/tracks.
 - The Colab backend, GPU availability, third-party model hosting and Google services are external dependencies. Retain your original recordings and evaluate a trial batch before processing a whole production.
 
@@ -175,8 +170,6 @@ PFX Extractor is an assistive restoration workflow, not a perfect source-isolati
 
 - [Architecture](architecture.md)
 - [Changelog](changelog.md)
-- [V3.2.0 trial notes](ESSAI_V3_2_0.md)
-- [V3.3.0 trial notes](ESSAI_V3_3_0.md)
 - [pt_api](https://github.com/sebedard-creator/pt_api)
 
 ## License and attribution

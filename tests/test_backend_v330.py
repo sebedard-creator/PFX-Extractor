@@ -1,4 +1,4 @@
-"""Tests DSP hors GPU des fonctions réelles des notebooks, sans importer TensorFlow."""
+"""Masques bouche/bodytalk du notebook courant, sans importer TensorFlow."""
 import ast
 import json
 import os
@@ -11,11 +11,11 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def notebook(version):
+def notebook(version='3_5_1'):
     return json.loads((ROOT / f'Colab_Backend_PFX_V{version}.ipynb').read_text(encoding='utf-8'))
 
 
-def scope(version):
+def scope(version='3_5_1'):
     nb = notebook(version)
     env = {'np': np, 'os': os, 'print': lambda *args, **kwargs: None}
     # N'exécuter que fonctions et constantes pures : aucun téléchargement / modèle / audio.
@@ -44,7 +44,9 @@ def scope(version):
 
 class BackendV330Tests(unittest.TestCase):
     def setUp(self):
-        self.env = scope('3_3_0')
+        self.env = scope()
+        # Tester ici les premiers masques; la passe résiduelle a ses tests dédiés.
+        self.env['DUCK_DEPTH_RESIDUS'] = 0
 
     def apply(self, frames, audio=None, **settings):
         self.env.update(settings)
@@ -53,36 +55,28 @@ class BackendV330Tests(unittest.TestCase):
         data = None if frames is None else {'frames': frames}
         return self.env['_apply_yamnet_masks_inplace'](audio.copy(), 100, data, 'test.wav')
 
-    def test_notebook_compile_and_unchanged_pipeline(self):
-        old, new = notebook('3_2_0'), notebook('3_3_0')
-        for i in (2, 3, 4, 7, 8):
-            self.assertEqual(old['cells'][i], new['cells'][i])
+    def test_current_notebook_compiles(self):
+        new = notebook()
         for i, cell in enumerate(new['cells']):
             if cell['cell_type'] == 'code':
                 source = ''.join(line for line in cell['source'] if not line.lstrip().startswith(('!', '%')))
                 compile(source, f'cell_{i}', 'exec')
-        # Alignement, séparation, mono, redécoupage, timecode restent identiques.
-        def funcs(nb):
-            return {n.name: ast.dump(n) for n in ast.parse(''.join(nb['cells'][6]['source'])).body
-                    if isinstance(n, ast.FunctionDef) and n.name != '_apply_yamnet_masks_inplace'}
-        self.assertEqual(funcs(old), funcs(new))
-
-    def test_disabled_exact_v320(self):
-        old = scope('3_2_0')
+    def test_disabled_masks_and_gain_preserve_audio(self):
         rng = np.random.default_rng(330)
         frames = {k: rng.random(180).astype(np.float32) for k in
                   ('human', 'soft_human', 'pfx', 'ambience', 'outside_pfx', 'mouth', 'bodytalk', 'human_guard')}
         audio = rng.normal(0, 0.1, (6501, 2)).astype(np.float32)
-        expected = old['_apply_yamnet_masks_inplace'](audio.copy(), 100, {'frames': frames}, 'test.wav')
-        actual = self.apply(frames, audio, DUCK_DEPTH_BOUCHE=0, GAIN_BODYTALK_DB=0)
-        np.testing.assert_array_equal(actual, expected)
+        actual = self.apply(frames, audio, DUCK_DEPTH_HUMAIN=0, DUCK_DEPTH_SOUFFLES=0,
+                            DUCK_DEPTH_BOUCHE=0, DUCK_DEPTH_AMBIANCE=0,
+                            DUCK_DEPTH_HORS_PFX=0, GAIN_BODYTALK_DB=0)
+        np.testing.assert_array_equal(actual, audio)
 
     def test_mouth_priority_over_bodytalk_and_pfx(self):
         out = self.apply({'mouth': [1], 'bodytalk': [1], 'pfx': [1]})
         np.testing.assert_allclose(out, 0.005, atol=1e-7)
 
     def test_bodytalk_two_db(self):
-        out = self.apply({'bodytalk': [1]})
+        out = self.apply({'bodytalk': [1]}, GAIN_BODYTALK_DB=2)
         np.testing.assert_allclose(out, 0.1 * 10 ** (2 / 20), rtol=1e-6)
 
     def test_human_and_ambience_veto_independent_of_sliders(self):

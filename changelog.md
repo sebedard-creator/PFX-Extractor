@@ -1,22 +1,46 @@
 # Changelog - PFX Extractor
 
 ## Unreleased
+
+### Documentation et entretien du dépôt (2026-10-03)
+
+- V3.5.1 présentée comme version courante; les versions évolueront au fil des améliorations, sans statut « essai ».
+- Anciens notebooks et guides par version retirés du dossier de travail par l'utilisateur. Historique conservé ici; contrôles et limites regroupés dans README et architecture. Liens obsolètes retirés.
+- Tests backend adaptés au notebook courant pour fonctionner sans les versions supprimées. Les comparaisons interversions ont été remplacées par des vérifications explicites de désactivation et de gain; elles ne prétendent plus comparer des sources historiques absentes.
+
+### Backend V3.5.1 — gain des mouvements de vêtements (2026-10-03)
+
+- Gain bodytalk maximal par défaut porté de +2 à +3,5 dB à la demande de l'utilisateur, après son retour positif sur V3.5.0.
+- Mêmes déclencheurs zipper/frottements/froissements; footsteps, taps et impacts ne déclenchent pas ce gain. Gardes humaines/ambiantes, marge de crête et détection des résidus conservées.
+- Nouveau notebook `Colab_Backend_PFX_V3_5_1.ipynb`. Retour au gain V3.5.0 à réglages identiques avec bodytalk à 2 dB; aucune étape de calcul supplémentaire.
+
+### Backend V3.5.0 — détection résiduelle à deux niveaux
+
+- Nouveau notebook autonome, V3.4 intacte. Gain d'analyse local maximal +18 dB par défaut, limité en crête et réservé au classificateur; aucune amplification du rendu.
+- Fusion maximale des scores initiaux/amplifiés avant un seul retrait résiduel; groupes et seuils V3.4 conservés. Gain nul pour retrouver V3.4, profondeur résiduelle nulle pour sauter l'analyse secondaire.
+- Tests dédiés et préécoute locale sur les repères utilisateur. Retrait supplémentaire mesuré sur plusieurs voix/soupirs; plusieurs bruits de bouche restent peu affectés. Amélioration à l'écoute confirmée par l'utilisateur le 3 octobre; une finition humaine reste nécessaire.
+
+### Backend V3.4.0 — respirations et résidus humains
+- Groupe prioritaire élargi à Sniff, Snort, Gasp et Pant, activation plus sensible et plus forte aux scores intermédiaires.
+- Seconde détection YAMNet sur le mix déjà atténué, ciblée sur les résidus humains, avant le gain bodytalk. Réglage indépendant à 90 %; aucune nouvelle séparation MDX/RoFormer.
+- Nouveau notebook autonome, V3.3.0 intacte à cette date. Profil renforcé désactivé et résidus à zéro : comportement V3.3.0 exact. Tests dédiés et préécoutes locales sur la scène fournie; l'utilisateur a ensuite jugé le retrait insuffisant, motivant V3.5.0.
+
 ### Local Drive Bridge — transfert vers Pro Tools
 - Correctif : l'objet de progression Gradio n'est plus évalué comme un booléen pendant les uploads, téléchargements ou effacements Drive. Sur certains callbacks, cette évaluation appelait `__len__` sur une liste vide et interrompait le téléchargement avec `list index out of range` avant la création PTX.
 - Couverture ajoutée : simulation de ce comportement Gradio, téléchargement Drive de bout en bout avec progression, et mise à jour du test d'intégration du bouton de livraison.
 
 ## 2026-09-22
-### Backend V3.3.0 — essai bruits de bouche et gain bodytalk
+### Backend V3.3.0 — bruits de bouche et gain bodytalk
 - Nouveau notebook autonome `Colab_Backend_PFX_V3_3_0.ipynb`; V3.2.0 et V3.1.2 conservées intactes.
 - Retrait buccal prioritaire à 95 % : indices buccaux directs et clics/smacks/pops uniquement avec contexte humain proche, marge temporelle pour les amorces de phrase.
 - Gain bodytalk jusqu'à +2 dB, freiné par les indices indésirables et limité par la marge avant saturation; pas de restauration brute supplémentaire ni de boost explicite des footsteps.
 - Deux contrôles indépendants; tous deux à zéro rendent le traitement V3.2.0. Partition YAMNet, séparation, fichiers/timecodes et frontend/PTX inchangés.
-- Tests DSP synthétiques reproductibles dans `tests/test_backend_v330.py`; limites et protocole d'écoute dans `ESSAI_V3_3_0.md`. Validation auditive Colab encore requise.
+- Tests DSP synthétiques reproductibles dans `tests/test_backend_v330.py`; validation auditive Colab encore requise à cette date.
 
 ## 2026-09-10
-### Backend V3.2.0 — essai souffles et chuchotements
-- Masque prioritaire Whispering / Sigh / Breathing, seuil 0,10–0,30 et retrait à 95 % sans veto PFX. Notebook et guide `ESSAI_V3_2_0.md` séparés de V3.1.2.
-- Amélioration à l'écoute rapportée par l'utilisateur le 22 septembre; bruits de bouche résiduels motivant l'essai V3.3.0.
+### Backend V3.2.0 — souffles et chuchotements
+- Masque prioritaire Whispering / Sigh / Breathing, seuil 0,10–0,30 et retrait à 95 % sans veto PFX. Nouveau notebook séparé de V3.1.2 à cette date.
+- Amélioration à l'écoute rapportée par l'utilisateur le 22 septembre; bruits de bouche résiduels motivant V3.3.0.
 
 ## 2026-08-17
 ### Backend Colab V3.1.2 — fiabilité de préparation et appariement des microphones

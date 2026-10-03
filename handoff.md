@@ -1,11 +1,42 @@
 # Handoff - PFX Extractor
 
-## Date de session : 2026-09-22 — essai V3.3.0
+## Date de session : 2026-10-03 — documentation consolidée
+
+- V3.5.1 est la version courante. À la demande de l'utilisateur, les versions ne sont plus présentées comme des essais; l'historique reste dans changelog.md.
+- L'utilisateur a supprimé les anciens notebooks et les guides par version. Le README et l'architecture contiennent les réglages et limites courants; les références aux guides supprimés ont été retirées, y compris dans l'en-tête Colab.
+- Les tests backend chargent maintenant V3.5.1. Les comparaisons aux notebooks historiques absents ont été remplacées par des attentes explicites, sans reproduire artificiellement leur code. Suite complète : 39/39 réussis. Les anciens noms des fichiers de tests désignent leurs groupes de fonctionnalités, pas le notebook chargé.
+- Les notes ci-dessous décrivent l'état à leur date; les mentions de fichiers anciens sont historiques.
+
+## Date de session : 2026-10-03 — V3.5.1, mouvements de vêtements
+
+- L'utilisateur rapporte une nette amélioration, tout en acceptant une finition humaine, puis demande +1,5 dB sur les mouvements/body foley/vêtements, hors body taps et footsteps.
+- Nouveau notebook V3.5.1 : `GAIN_BODYTALK_DB=3.5` au lieu de 2.0. Même sélection 372/470/473/481, mêmes gardes et mêmes fonctions DSP. Le supplément réel dépend du masque, du veto et de la marge de crête; c'est un gain maximal.
+- README, architecture et changelog actualisés. Retour au réglage V3.5.0 avec le slider à 2 dB. Les rendus existants ne changent pas rétroactivement; lancer le nouveau notebook pour une nouvelle sortie. Validation auditive avec ce gain encore à faire.
+- Vérification locale : cellules DSP/orchestration identiques à V3.5.0, compilation valide, supplément mesuré de 1,5000 dB sur un masque maximal sans veto, exclusions footsteps/Tap/Thump/Slap, gardes et limite de crête vérifiées; retour bit-identique au gain 2 dB. Aucun nouveau rendu GPU.
+
+## Date de session : 2026-09-23 — V3.5.0
+
+- L'utilisateur juge la V3.4 insuffisante et fournit 15 repères humains. L'essai sur la sortie réelle confirme que l'amplification réservée à YAMNet rend plusieurs indices faibles plus détectables. Ne pas confondre scores et qualité auditive; absence de témoins foley seuls validés.
+- Après accord : `Colab_Backend_PFX_V3_5_0.ipynb`, gain d'analyse local maximal +18 dB, fusion maximale avec scores initiaux, un seul retrait résiduel. Réglages/classes V3.4 inchangés. Réglages documentés dans l'architecture courante; anciens notebooks conservés à cette date.
+- Préécoute approximative calculée avec le vrai modèle sous `work/diagnostic_mpm05/preview_v350`, sans relancer les séparateurs. Environ −20 dB supplémentaires sur sept repères, mais quasi aucun changement sur plusieurs autres, dont deux bruits de bouche. Rapport `verification.json`. Originaux inchangés; WAV d'écoute sans BWF, longueur de la sortie V3.3 fournie (un échantillon de moins que la référence V3.4).
+- TC interprétés provisoirement à 23,976 i/s, nominal 24, origine début WAV. Confirmer la mention « 23.28 » avant analyse image par image. Run GPU complet et écoute utilisateur restent à faire. Tests dédiés `tests/test_backend_v350.py`; pas de changement frontend/API/dépendances applicatives.
+- Validation locale : 39/39 tests réussis, dont 8 dédiés V3.5; `git diff --check` sans erreur. Les tests frontend simulent des échecs et en écrivent les messages dans le journal applicatif : ne pas les interpréter comme des incidents utilisateur.
+
+## Date de session : 2026-09-23 — V3.4.0
+
+- Diagnostic CPU réel sur le couple MPM_05_Boom-Gain_12 fourni : respiration beaucoup mieux classée après séparation vers 01:23; Sniff sous le seuil général vers 03:35. Scores et rapport sous `work/diagnostic_mpm05`.
+- Après accord utilisateur : notebook V3.4.0, profil respiratoire élargi et seconde analyse humaine résiduelle avant bodytalk. Réglages documentés dans l'architecture courante; V3.3.0 conservée à cette date, retour exact par désactivation des deux ajouts.
+- Préécoutes sous `work/diagnostic_mpm05/preview_v340` : résidus seuls et combinaison approximative basée sur la sortie V3.3 (pas un nouveau run complet des séparateurs). Longueur conservée, WAV d'écoute sans métadonnées BWF. Retrait mesuré ≈20 dB vers 01:23, ≈12,5 dB vers 03:35 dans la combinaison.
+- Tests dédiés `tests/test_backend_v340.py`. Validation auditive et run Colab complet à faire. Diagnostic installé dans un environnement isolé sous `work/yamnet_diagnostic_env`; frontend/API inchangés.
+
+---
+
+## Date de session : 2026-09-22 — V3.3.0
 
 - L'utilisateur confirme une amélioration avec V3.2.0; demande moins de becs/smacks et un peu plus de bodytalk.
-- Nouveau notebook `Colab_Backend_PFX_V3_3_0.ipynb` : retrait buccal prioritaire 95 %, gain bodytalk maximal +2 dB avec veto humain/ambiant et marge avant saturation. Voir `ESSAI_V3_3_0.md` pour tous les seuils, limitations et procédure A/B.
+- Nouveau notebook `Colab_Backend_PFX_V3_3_0.ipynb` : retrait buccal prioritaire 95 %, gain bodytalk maximal +2 dB avec veto humain/ambiant et marge avant saturation. Les seuils et limites du traitement courant sont documentés dans architecture.md.
 - V3.2.0 et V3.1.2 intactes, aucun changement frontend/API. Les nouveaux contrôles à zéro retrouvent le traitement V3.2.0, testé bit-identique.
-- Tests synthétiques reproductibles : `tests/test_backend_v330.py`. Ne pas confondre réussite des tests avec validation perceptive : premier essai Colab V3.3.0 encore à faire.
+- Tests synthétiques reproductibles : `tests/test_backend_v330.py`. Ne pas confondre réussite des tests avec validation perceptive : premier traitement Colab V3.3.0 encore à faire.
 - Résultat : 11/11 tests V3.3.0, 19/20 sur la suite complète. Échec préexistant du test frontend `test_download_builds_and_returns_protools_delivery` : il attend un appel sans argument, le code passe `progress=...`. `app_local.py` et son test sont inchangés depuis HEAD; correction hors de cet essai.
 
 ---

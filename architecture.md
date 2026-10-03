@@ -1,8 +1,26 @@
-# ARCHITECTURE TECHNIQUE (PFX-EXTRACTOR v3.0)
+# ARCHITECTURE TECHNIQUE (PFX-EXTRACTOR v3.5.1)
 
-## Extension expérimentale backend V3.3.0 (2026-09-22)
+## Réglage backend V3.5.1 (2026-10-03)
 
-Le notebook `Colab_Backend_PFX_V3_3_0.ipynb` prolonge l'essai V3.2.0 sans modifier les contrats Drive/WAV/BWF/PTX ni la partition des 521 classes. L'analyse brute fournit trois masques additionnels : bouche (indices directs ou transitoires avec contexte humain), bodytalk (zipper/rub/crumpling/rustle), garde humaine sensible. Le mix final applique le maximum des retraits, puis un gain bodytalk jusqu'à +2 dB pondéré par un veto humain/ambiant, avec marge conservatrice avant saturation. Aucune restauration brute additionnelle. Les paramètres et limitations temporelles sont détaillés dans `ESSAI_V3_3_0.md`. Les versions précédentes restent disponibles; le reste de ce document décrit le socle historique.
+Le notebook courant est `Colab_Backend_PFX_V3_5_1.ipynb`. Le gain bodytalk maximal par défaut est +3,5 dB (+2 dB auparavant). Le masque utilise les classes 372 (zipper), 470 (rub), 473 (crumpling/crinkling), 481 (rustle). Footsteps, taps et impacts ne déclenchent pas ce gain. Le gain effectif reste pondéré par le masque et le veto humain/ambiant, puis limité par la marge de crête existante. Il relève le mix pendant les mouvements détectés, avec possibilité de relever d'autres sons simultanés. Le README décrit les contrôles; `changelog.md` conserve l'historique des versions. Les anciens notebooks et guides par version ont été retirés du dossier de travail.
+
+## Analyse résiduelle et gain bodytalk
+
+Le traitement suit cet ordre : analyse YAMNet du brut, pré-denoise protégé, séparation MDX/RoFormer et mélange aligné, premiers retraits pilotés par le brut, analyse résiduelle du mix atténué, retrait résiduel puis gain bodytalk appliqué une seule fois.
+
+La détection résiduelle conserve son observation au niveau initial et ajoute une observation amplifiée par fenêtre (gain maximal +18 dB par défaut, crête limitée à 0,90). Les scores par classe sont fusionnés par maximum avant les enveloppes et l'unique retrait résiduel. Les copies amplifiées ne sont jamais rendues. Fenêtres effectives de 15 600 échantillons à 16 kHz, pas de 7 680; dernier segment complété par des zéros. Gain d'analyse nul : seulement l'observation initiale; profondeur résiduelle nulle : aucune analyse secondaire. Un appel court au modèle s'ajoute par fenêtre amplifiable; MDX et RoFormer ne sont pas relancés.
+
+| Masque | Classes / activation | Enveloppe |
+| --- | --- | --- |
+| Respiratoire renforcé sur le brut | Whispering 12, Sigh 23, Breathing 36, Gasp 39, Pant 40, Snort 41, Sniff 45; seuil doux 0,06–0,18 puis racine carrée | Marge ±1 frame, attaque 0,05 s, relâchement 0,55 s |
+| Résidus respiratoires | Les mêmes classes; seuil 0,08–0,25 puis racine carrée | Maximum des groupes résiduels, marge ±1 frame, attaque 0,05 s, relâchement 0,45 s |
+| Résidus buccaux | Chewing 49, Biting 50, Gargling 51; seuil 0,10–0,30 | Même enveloppe résiduelle |
+| Résidus parlés | Classes 0–4; seuil 0,10–0,35 | Même enveloppe résiduelle |
+| Garde humaine résiduelle | Les 61 classes humaines; seuil 0,06–0,20 | Marge ±1 frame, attaque 0,04 s, relâchement 0,60 s |
+
+Le premier masque buccal exploite les indices directs 49/50/51 et les transitoires 428/461/485 avec contexte humain proche. Le bodytalk utilise ses quatre classes de froissement/frottement et un veto combinant les masques humains, buccaux et ambiants initiaux, ainsi que les indices humains résiduels. Le gain est limité par la marge calculée sur la crête du mix avant les retraits, avec cible conservatrice 0,98; cette limite peut empêcher le gain sur un groupe entier.
+
+Au maximum, les retraits respiratoire 95 % et résiduel 90 % peuvent se cumuler à environ −46 dB, en plus du denoise et de la séparation. Une détection peut manquer ou être fausse; le foley simultané peut être atténué. Les scores ne sont pas des probabilités calibrées. Le pas YAMNet est 0,48 s : une attaque de 50 ms n'implique pas une localisation à 50 ms. La finition humaine reste nécessaire.
 
 ## 1. VUE D'ENSEMBLE DU SYSTÈME
 PFX-EXTRACTOR est une application hybride composée d'une interface locale de gestion de fichiers (le "Drive Bridge" en Gradio) et d'un moteur de traitement audio puissant propulsé par un backend Google Colab. L'application facilite la création d'une piste Production FX à partir de fichiers de tournage : elle conserve les effets synchrones de plateau (pas, vêtements, manipulations, props, impacts) tout en retirant les humains, les ambiances et le contenu éditorial hors PFX. Le backend combine des modèles de **séparation de source** (BS-RoFormer, MDX23C) et un modèle de **détection d'événements sonores** (YAMNet).
@@ -23,7 +41,7 @@ Le code local est structuré autour de plusieurs modules distincts :
 - **Adaptateur de livraison Pro Tools (`protools_export.py`) :** Couche propre à PFX Extractor. Elle trie les WAV par filename, impose le format `<famille>-Gain_<numéro>_PFX_Ready.wav`, affecte la première famille à `PFX 01` et la seconde à `PFX 02`, puis appelle `build_audio_session()` de `pt_api`. `requirements.txt` installe la release validée `v1.3.8` depuis son tag GitHub immuable; `PT_API_PATH` et le dépôt frère `pt_api` restent des fallbacks de développement. Une troisième famille est refusée explicitement. Cette politique applicative demeure hors de l'API générique.
 - **Template Pro Tools locale (`template.ptx`) :** Modèle natif validé, vide sur la timeline, possédant les pistes `PFX 01`/`PFX 02` et le prototype média requis par le builder. Ce fichier propriétaire est exclu par `.gitignore` et doit être installé séparément à la racine de chaque déploiement. Le flux intégré cible des sessions mono 48 kHz à 23,976 fps. L'utilisateur peut fournir ponctuellement une autre template compatible dans les paramètres avancés.
 - **~~Module DSP (`dsp_local.py`)~~ — DÉPRÉCIÉ (V2.1) :** Bibliothèque de fonctions DSP initialement prévue comme couche de post-traitement local. Confirmé inutilisé (aucun import dans `app_local.py`) et retiré de la boucle de traitement — la protection PFX et le denoise sont centralisés dans le backend Colab. Le fichier reste dans le dépôt à titre de référence mais n'est plus appelé nulle part.
-- **Backend Colab (`Colab_Backend_PFX_V3_1_2.ipynb`) :** Le script exécuté sur les serveurs de Google (GPU), responsable de :
+- **Backend Colab (`Colab_Backend_PFX_V3_5_1.ipynb`) :** Le script exécuté sur les serveurs de Google (GPU), responsable de :
   - la séparation de sources (RoFormer + MDX23C, fusion pondérée configurable) ;
   - l'alignement automatique séquentiel Lav/Boom avec garde-fou de confiance (voir ci-dessous) ;
   - le pré-nettoyage adaptatif avec protection PFX ;
