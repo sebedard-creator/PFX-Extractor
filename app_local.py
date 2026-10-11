@@ -195,6 +195,10 @@ def download_processed_zip(template_file, session_name, progress=gr.Progress()):
         f"Session: {result['session_path']}\n"
         f"Livraison: {result['archive_path']}"
     )
+    if drive_result.get('verified'):
+        status += f"\nLot Test V3 vérifié : {drive_result['run_id']} (empreintes, durées, timecodes, identifiants distincts)."
+    else:
+        status += "\nAncien backend : absence de manifeste de lot, cohérence entre traitements non vérifiée."
     logger.info("Livraison prete: %s", result["archive_path"])
     return status, result["archive_path"]
 

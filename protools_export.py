@@ -7,7 +7,11 @@ import re
 import shutil
 import tempfile
 import zipfile
+import json
 from pathlib import Path
+from delivery_contract import (DELIVERY_MANIFEST, validate_delivery_manifest,
+                               verify_delivery_file, microphone_role,
+                               verify_unique_wave_umids, read_wave_umid)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -123,6 +127,25 @@ def collect_processed_manifest(processed_dir, track_names=DEFAULT_TRACK_NAMES):
     if not audio_paths:
         raise ValueError("Aucun WAV traité n'est disponible pour l'export Pro Tools.")
 
+    delivery_path = processed_dir / DELIVERY_MANIFEST
+    if delivery_path.exists():
+        manifest = json.loads(delivery_path.read_text(encoding='utf-8'))
+        outputs = validate_delivery_manifest(manifest)
+        expected = {entry['name']: entry for entry in outputs}
+        if {path.name for path in audio_paths} != set(expected):
+            raise ValueError('Les WAV locaux ne correspondent pas au lot vérifié.')
+        roles = [r for r in ('BOOM', 'LAV') if any(e['role'] == r for e in outputs)]
+        if len(roles) > len(track_names):
+            raise ValueError('Nombre de pistes insuffisant pour les microphones du lot.')
+        tracks = dict(zip(roles, track_names))
+        descriptors = []
+        for path in audio_paths:
+            entry = expected[path.name]
+            verify_delivery_file(path, entry)
+            descriptors.append({'audio_path': path, 'track_name': tracks[entry['role']]})
+        return descriptors, [{'family': role, 'track': tracks[role],
+                              'count': sum(e['role'] == role for e in outputs)} for role in roles]
+
     seen_filenames = set()
     family_tracks = {}
     families = []
@@ -137,12 +160,12 @@ def collect_processed_manifest(processed_dir, track_names=DEFAULT_TRACK_NAMES):
 
         match = _PROCESSED_FILENAME.fullmatch(path.name)
         if match is None:
-            raise ValueError(
-                "Filename traité non reconnu; format attendu: "
-                "<famille>-Gain_<numéro>_PFX_Ready.wav. "
-                f"Reçu: {path.name}"
-            )
-        family = match.group("family")
+            try:
+                family = microphone_role(path.name)
+            except ValueError as exc:
+                raise ValueError(f'Filename traité non reconnu : {path.name}') from exc
+        else:
+            family = match.group("family")
         family_key = family.casefold()
         if family_key not in family_tracks:
             family_index = len(family_tracks)
@@ -273,6 +296,8 @@ def create_protools_delivery(
     descriptors, families = collect_processed_manifest(
         processed_dir, track_names=track_names
     )
+    # Generic API remains unchanged; PFX refuses conflicting media identities before calling it.
+    verify_unique_wave_umids([entry['audio_path'] for entry in descriptors])
     template = resolve_template_path(template_path)
     if session_name is None or (
         isinstance(session_name, str) and not session_name.strip()
@@ -303,6 +328,12 @@ def create_protools_delivery(
             raise ValueError(
                 "Le nombre de clips retourné par pt_api est incohérent."
             )
+        delivered_audio = Path(result['audio_files_directory'])
+        paths = [delivered_audio / Path(entry['audio_path']).name for entry in descriptors]
+        verify_unique_wave_umids(paths)
+        for entry, path in zip(descriptors, paths):
+            if read_wave_umid(path) != read_wave_umid(entry['audio_path']):
+                raise ValueError('UMID modifié lors de la livraison PTX; archive refusée.')
         archive_path = _archive_session_directory(session_directory)
     except Exception:
         if session_directory.is_dir():

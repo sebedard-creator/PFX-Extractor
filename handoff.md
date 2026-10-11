@@ -1,5 +1,61 @@
 # Handoff - PFX Extractor
 
+## Date de session : 2026-10-06 — Test V4 demandée pour le cumul humain
+
+- L'utilisateur veut une nouvelle copie de Test V3 avec la séquence de retrait cumulatif de V3.5.2, pour comparer les soupirs/respirations/chuchotements. Nouveau `Colab_Backend_PFX_Vtest_V4.ipynb`; V3/V3.5.2 préservées.
+- Bandit et paramètres conservés : pré-denoise 40 %, bodytalk +4 dB, gain d'écoute résiduel +18 dB. Finition : masques YAMNet du snapshot brut → premier retrait sur SFX → analyse résiduelle du rendu déjà atténué → deuxième retrait multiplicatif → bodytalk local une seule fois. Pas de réintroduction de Snowball/alignement. Masques du brut réanalysés scène par scène en remplacement de la passe SFX V3, sans accumulation mémoire.
+- Implémentation embarquée depuis backend_test/v4_processing.py et v4_workflow.py, contrat protocole 2 commun et identifiants Vtest_V4/2026-10-06-test-v4-cumulative. Même bouton ZIP/PTX, aucun manifeste à renommer, anciens résultats conservés. API intacte.
+- Tests dédiés tests/test_backend_vtest_v4.py : 8 réussis, dont workflow avec modèles simulés mais vraie finition/FFmpeg et contrôles N/TC/UMID. Le cumul 95 % × 90 % peut atteindre environ −46 dB, pas une garantie d'amélioration; Foley simultané possiblement davantage atténué. Validation auditive à réaliser par l'utilisateur sur Colab.
+
+## Date de session : 2026-10-06 — V3.5.2 demandée
+
+- Nouveau `Colab_Backend_PFX_V3_5_2.ipynb` : V3.5.1 avec correction UMID uniquement côté traitement/export; pré-nettoyage ensuite ajusté à 40 % sur demande (contre 58 %), autres réglages inchangés, bodytalk +3,5 dB. V3.5.1 conservée (SHA256 FAF3695FBB4621ACF2852037992F6888C436CA8E962A5CC4C6B655E419973A7A). API intacte.
+- Export temporaire FFmpeg avec UMID supprimé des métadonnées, écriture UUID4 binaire et contrôles audio/identités avant publication. Helpers UMID identiques à `delivery_contract.py`. Tests dédiés : `tests/test_backend_v352.py`.
+- L'utilisateur refuse toute manipulation du manifeste en changeant de notebook. V3.5.2 publie désormais comme Test V3 via protocole 2 et run_<id>, pointeur commun et contrôles d'intégrité. Choisir l'un ou l'autre ipynb suffit. Anciens lots conservés. Helpers backend_test/v352_delivery.py + contrat complet embarqués. Tests des vrais workflows dans les deux sens avec modèles simulés. Pas de traitement concurrent; reprise exceptionnelle après confirmation de l'arrêt d'un run running interrompu. Aucun renommage manuel du manifeste entre ces deux notebooks.
+- L'utilisateur confirme que le téléchargement Test V3 est réglé après relance du frontend, préfère vitesse/body foley mais note encore des souffles; amplification détecteur +18 dB toujours active. Cette demande ne modifie pas les réglages de Test V3. Pas de nouvelle validation auditive Colab locale.
+
+## Date de session : 2026-10-06 — correction UMID autorisée, API hors périmètre
+
+- L'utilisateur demande de corriger le programme sans toucher pt_api; il refera un test complet. Ne pas réparer ses lots à sa place : ils sont conservés comme preuves.
+- Diagnostic : 131 WAV = 2591.005083 s, mais 63 UMID identiques. Le 01, silencieux, a 396396 samples (8 s 6 images). Limiter chaque collision à ce premier média donne exactement 75419344 samples = 00:26:09:16 à 23,976. WAV 06/09/17/32/42 et 04/12/13 contiennent bien de l'audio. L'ancien lot MPM_06_PFX a la même collision. FFmpeg n6.1 wavenc utilise strtoll sur des segments UMID hex unsigned, donnant 7fffffffffffffff.
+- Correction uniquement du notebook courant Test V3 et du programme local : transfert FFmpeg `umid=` vide, puis écriture binaire d'un UMID neuf (label native basic + UUID4 matériel + extension nulle). Relecture UMID et hash data inchangé. Source/raw jamais modifiée. Protocole 2 identités sources/sorties, vérification anti-collision et anti-réutilisation source. Révision 2026-10-06-test-v3-umid.
+- Frontend : contrôle des identités réelles sur téléchargement, avant API et sur les Audio Files sortis avant ZIP, même anciens lots sans protocole 2. Refus explicite des collisions. Redémarrer le frontend et recharger le fichier ipynb corrigé (même nom). Import manuel dans session Pro Tools neuve à vérifier. Ne pas présenter tous les problèmes d'import, notamment +9 images, comme formellement validés corrigés.
+- 88 tests locaux réussis après correction (dont export/relecture PTX réelle sur audio synthétique); empreinte API avant/après identique. Validation manuelle Pro Tools toujours attendue.
+- pt_api.py doit rester inchangé : SHA256 avant intervention F77E7B873D5620405A289C01DE5F19DF3296149EA759D8A9627BADDEA901F6A9. Aucun DSP modifié; pré-denoise 40 %, bodytalk max +4 dB conservés.
+
+## Date de session : 2026-10-05 — Test V3 demandé après audit
+
+- L'utilisateur retient un pré-denoise à 40 % après écoute du bypass et demande de corriger les cinq points d'audit. Nouveau `Colab_Backend_PFX_Vtest_V3.ipynb`; anciens notebooks inchangés.
+- Suppression de l'alignement BOOM/LAV et du regroupement Snowball. Scènes indépendantes, N et TC vérifiés; aucune coupe ou ajout de silence. Pré-denoise adaptatif 40 %, protégé par YAMNet brut. Finition YAMNet + résidus sur SFX non atténué, une seule atténuation par maximum. Bodytalk +4 dB local, veto indices de pas/impacts, pas d'isolation parfaite des tissus.
+- Nouveau contrat `delivery_contract.py`, sources V3 embarquées sous `backend_test/`. Publications `2_Environnements_IA/run_<id>` et `PFX_delivery.json` racine. Frontend mis à jour/redémarré indispensable; même bouton ZIP/PTX. Vérification des générations complètes, fichiers exacts, hash, durée et TC, puis contrôle du pointeur. Anciennes copies locales déplacées dans `work/processed_previous_*`, non effacées. pt_api non modifié.
+- Préflight avant modèles : noms BOOM XOR LAV valides sous Windows, comptes égaux si deux micros, mono48k RIFF BWF/UMID/time_reference UInt32, 1024–0xFFFFFF samples. Sources snapshot local vérifié. Export par microphone même avec préfixes de scènes variés. Les limites du profil sont documentées; aucune prolongation arbitraire des petits clips.
+- Validation finalisée le 6 octobre : certains FFmpeg locaux émettent fmt IEEE float simple (18 bytes), alors que pt_api requiert WAVE_EXTENSIBLE (40 bytes). `ensure_export_extensible` adapte uniquement le fmt des fichiers de staging nouvellement créés; préserve données/BWF, vérifie géométrie et idempotence. Bext version 1/2 avec UMID requis au préflight; tests réels FFmpeg et data identiques réussis.
+- 83 tests locaux passent, y compris une génération/relecture PTX réelle avec template local et audio synthétique. Aucune validation auditive T4 ni ouverture/import manuel de Test V3 effectuée. Interdiction de runs concurrents; après crash dur, confirmer arrêt, option REMPLACER_RUN_INTERROMPU puis nouveaux chemins/run_id. Retour à backend historique : archiver/retirer le manifeste V3; sous-dossiers de génération et sauvegardes locales à gérer explicitement, pas purgés automatiquement.
+- Enquête MPM_06_Boom-Gain_90 : accès Drive lecture seule. Brut et traité = 1483482 samples (30.905875 s), TC 1823255434; copie locale/export et manifeste SHA256 cohérents. PTX généré : même longueur, même début, offset source 0. Deux runs (58 % et bypass) gardent N. Utilisateur constate +9 images une fois dans sa timeline; méthode de transfert et session après import non fournies. Ne pas prétendre le bug résolu par Test V3.
+
+## Date de session : 2026-10-05 — comparatif sans pré-nettoyage
+
+- Nouvelle variante `Colab_Backend_PFX_Vtest_sans_prenettoyage.ipynb` demandée par l'utilisateur pour évaluer la perte éventuelle de body foley au pré-denoise. Vtest actuelle (+4 dB, pleurs, pré-denoise 58 %) et V3.5.1 conservées.
+- Bypass réel : fonction et appel pré-denoise retirés, Bandit lit les WAV alignés/regroupés directement. Tous les autres traitements identiques, même frontend et ZIP/PTX. Aucun traitement audio externalisé.
+- 69 tests locaux passent : parité des traitements restants, échantillons exacts à l'entrée Bandit, livraison répétée et BWF. Pas de test auditif/T4 de cette variante. Préserver le premier ZIP avant l'autre run qui remplace les WAV de même nom sur Drive.
+
+## Date de session : 2026-10-05 — Vtest pleurs, longueurs à diagnostiquer
+
+- L'utilisateur est impressionné par le comparatif, mais constate plus de pleurs et trois clips avec quelques frames de trop. Il a supprimé les WAV et confirme que le problème concernait aussi des clips longs.
+- Vtest modifiée pour les pleurs : classes 19–22, `DUCK_DEPTH_PLEURS=95`, masque brut prioritaire + ajout aux résidus, veto bodytalk; 0 désactive ces ajouts. Puis gain bodytalk maximal porté à +4 dB (+0,5 dB) à la demande de l'utilisateur, protections inchangées. Pas de nouveau modèle ou d'appel YAMNet. V3.5.1, frontend et API intacts; workflow identique.
+- Audit durées : N préservé par Bandit, bornes Snowball strictes et longueur export vérifiée. Seule extension volontaire : clips <1024 samples portés à 1024 (max 21,3 ms), exclue comme explication des longs clips. Test de queue artificielle +12000 samples éliminée du redécoupage réussi. Ne pas annoncer un bug de longueur corrigé : cause non établie. Le manifeste Drive peut survivre aux WAV supprimés (`0_Model_Cache/Bandit_v2/manifests`) et contient les longueurs comparables.
+- Ajustement pleurs heuristique à écouter : aucun exemple disponible pour calibration, ne pas garantir la suppression effective. Révision `2026-10-05-pleurs-bodytalk4db` dans manifeste, changements décrits en en-tête notebook.
+
+## Date de session : 2026-10-03 — Vtest Bandit v2, confidentialité
+
+- L'utilisateur demande un notebook séparé pour comparer le même projet, puis impose le traitement dans Colab (audio confidentiel, aucune API externe). Création de `Colab_Backend_PFX_Vtest.ipynb`, autonome; V3.5.1 inchangée (SHA256 `faf3695fbb4621acf2852037992f6888c436ca8e962a5cc4c6b655e419973a7a`).
+- Bandit v2 officiel multilingue / DnR v3, sortie SFX à la place du mélange MDX/RoFormer. Ce n'est PAS DnR-nonverbal ni MVSEP. Même finition, mêmes paramètres; le modèle n'est pas garanti meilleur pour les sons humains non verbaux. Aucun upload de WAV vers un service tiers.
+- Correction demandée par l'utilisateur : workflow strictement habituel, seul le notebook chargé change. Entrée `1_Bruts_vers_Colab`, sortie BWF `2_Environnements_IA`, puis bouton ZIP/PTX du frontend. Plus de dossier de comparaison ni ZIP Colab séparé. Télécharger et conserver la première livraison avant le second run (remplacement des WAV de même nom); ne pas vider les bruts entre comparatifs ni télécharger pendant le traitement. Manifeste technique dans `0_Model_Cache/Bandit_v2/manifests`, hors livraison.
+- Runtime maintenable `backend_test/bandit_runtime.py` embarqué en cellule 4, sources et poids publics épinglés/vérifiés, chargement strict, preflight réel de 8 s, pas de bypass. Voir architecture pour paramètres et chemins.
+- Validation après correction du workflow : 57 tests réussis (39 existants + 18 nouveaux), dont deux publications successives dans un dossier frontend déjà rempli (ML simulé, WAV réels, aucun manifeste/ZIP parasite), reconstruction aux bords, absence de décalage/normalisation, égalité YAMNet/DSP avec V3.5.1 et export BWF ffmpeg réel mono 48 kHz avec time_reference conservée. `git diff --check` sans erreur.
+- Smoke réel local CPU : poids officiels 446680129 octets et empreinte vérifiés, 37022688 paramètres chargés strictement; signal synthétique de 384000 échantillons -> SFX de même longueur, valeurs finies (pic 0.00011571197). Aucune scène confidentielle utilisée pour ce contrôle; cela ne valide pas la qualité auditive. T4 et Colab complet non exécutés ici.
+- Environnement de validation isolé et poids publics sous `work/bandit_test_env` et `work/bandit_validation` (ignorés par Git). Aucune modification du frontend, de pt_api, des requirements applicatifs ni de colab_link.txt. Les tests frontend simulent des erreurs dans les logs; ce ne sont pas des incidents utilisateur.
+
 ## Date de session : 2026-10-03 — documentation consolidée
 
 - V3.5.1 est la version courante. À la demande de l'utilisateur, les versions ne sont plus présentées comme des essais; l'historique reste dans changelog.md.

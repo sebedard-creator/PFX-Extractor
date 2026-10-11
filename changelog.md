@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+### Test V4 — Bandit et retrait humain cumulatif (2026-10-06)
+
+- Nouvelle copie `Colab_Backend_PFX_Vtest_V4.ipynb`, avec sources embarquées `backend_test/v4_processing.py` et `backend_test/v4_workflow.py`. Test V3 et V3.5.2 conservées.
+- Même séparation Bandit, pré-nettoyage 40 %, détection résiduelle avec gain maximal +18 dB, bodytalk maximal +4 dB et scènes indépendantes. La finition utilise les masques du brut sur les SFX, puis analyse le rendu déjà atténué et applique un deuxième retrait cumulatif, comme le principe de V3.5.2.
+- Maximum entre catégories au premier retrait, puis multiplication des deux passes : 95 % et 90 % peuvent atteindre environ −46 dB si les deux détections sont maximales. Le bodytalk est relevé une seule fois après le cumul, avec les veto et la marge locale de Test V3. Coût possible : perte accrue de Foley simultané.
+- Workflow ZIP/PTX et protocole 2 commun inchangés; aucune manipulation Drive en changeant de notebook. UMID uniques, N/TC/empreintes vérifiés, anciennes générations conservées, erreur de détecteur bloquante. Aucun changement dans pt_api.
+- Tests synthétiques du cumul et de l'ordre des analyses, des zones temporelles, bodytalk, désactivation des résidus, puis workflow avec IA simulée et export FFmpeg réel. La qualité auditive sur le projet sera évaluée par l'utilisateur dans Colab.
+
+### V3.5.2 — rétroportage UMID sur V3.5.1 (2026-10-06)
+
+- Nouveau `Colab_Backend_PFX_V3_5_2.ipynb`; V3.5.1 conservée à l'identique. Modèles, fonctions DSP, YAMNet et gain bodytalk (+3,5 dB) conservés. À la demande de l'utilisateur, pré-nettoyage par défaut abaissé de 58 % à 40 %, comme Test V3; autres réglages inchangés.
+- Exclusion de l'UMID du transfert FFmpeg, écriture binaire d'un nouvel identifiant UUID4 par rendu; contrôle du hash audio avant/après, relecture, unicité du lot et non-réutilisation des identités sources. Helpers identiques à ceux validés pour Test V3.
+- Export dans un fichier temporaire; FFmpeg doit réussir et les contrôles UMID passer avant remplacement du WAV final. Une erreur conserve le précédent fichier de destination.
+- Bascule automatique V3.5.2 ↔ Test V3 : protocole 2 commun, dossier par génération et pointeur running/failed/complete. Aucune manipulation manuelle du manifeste. Les anciens résultats sont conservés; les runs incomplets ou remplacés ne sont pas publiés.
+- DSP historique conservé, dont alignement/Snowball, sans modification de pt_api. La livraison vérifie durées, TC, empreintes et UMID; normalisation du seul fmt WAV si nécessaire. Tests de bascule des deux notebooks, modèle en échec, lot incomplet et concurrence, avec IA simulée; export FFmpeg réel et parité DSP vérifiés. Validation auditive Colab non effectuée localement.
+
+### Test V3 — correction des collisions UMID (2026-10-06)
+
+- Défaut reproduit sur le lot réel : 63 WAV partageaient un UMID altéré. Le premier média silencieux de 8 s 6 images explique les clips tronqués/silencieux; la somme avec cette limitation correspond exactement aux 26:09:16 observées.
+- UMID retiré du transfert de métadonnées FFmpeg, nouvel identifiant par rendu écrit en binaire dans le BWF. Contrôle de l'identité et du chunk audio avant/après. Durée, timecode et DSP inchangés.
+- Manifeste protocole 2 avec UMID sources/sorties, unicité et interdiction de réutiliser les identités sources. Frontend refuse les collisions dans les WAV réels, avant API et après copie vers Audio Files. L'API n'a pas été modifiée.
+- 88 tests réussis : débordement signé, collisions, conservation audio/TC, unicité entre runs, manifeste et refus avant API. Anciennes livraisons conservées; aucune réparation de fichiers utilisateur effectuée. Recharger Test V3 et redémarrer le frontend; validation d'import en session Pro Tools neuve à effectuer.
+
+### Test V3 — scènes indépendantes et cinq points d'audit (2026-10-05)
+
+- Nouveau `Colab_Backend_PFX_Vtest_V3.ipynb`, anciens notebooks conservés. Pré-nettoyage 40 % après comparaison utilisateur; aucun alignement BOOM/LAV ni fusion entre scènes.
+- Retrait YAMNet sur le SFX de Bandit; observation résiduelle du même signal non atténué, profondeurs combinées par maximum. Plus de cumul brut × résidu.
+- Bodytalk +4 dB maximum avec marge locale et veto pas/impacts détectés; gain temporel, pas séparation parfaite des vêtements.
+- Livraison par génération complète avec manifeste, empreintes SHA-256, durées et TC. Frontend refuse les lots incomplets/corrompus/changés et conserve la précédente copie locale. Redémarrage frontend nécessaire; bouton ZIP/PTX inchangé. Retour aux notebooks historiques après V3 : archiver/retirer explicitement le manifeste racine. Les générations ne sont pas automatiquement purgées.
+- Validation anticipée des entrées BWF/mono48k, noms BOOM/LAV libres et limites PTX. Export V3 mappé par microphone, sans obligation de préfixes ou numérotation identiques.
+- Validation complétée le 6 octobre : normalisation compatible du seul en-tête float32 des rendus FFmpeg, sans modification des échantillons ni du BWF. Test d’export réel à 1483482 samples et TC 1823255434.
+- 83 tests réussis, dont construction/relecture PTX réelle sur audio synthétique. API inchangée. Pas de garantie sur la qualité auditive ni de correctif confirmé pour les neuf images supplémentaires après import dans la timeline utilisateur.
+
+### Vtest sans pré-nettoyage (2026-10-05)
+
+- Variante séparée `Colab_Backend_PFX_Vtest_sans_prenettoyage.ipynb`, avec contournement complet du pré-denoise : lecture directe des WAV alignés/regroupés par Bandit, sans filtrage ni restauration brute préalable. Pas seulement un slider à zéro.
+- Analyse YAMNet brute, finition, retrait pleurs, gain bodytalk +4 dB et workflow ZIP/PTX inchangés. Vtest à 58 % et V3.5.1 conservées. Variante identifiée dans le manifeste; sauvegarder la première livraison avant le second run.
+- 69 tests locaux réussis, dont vérification des échantillons transmis à Bandit et export BWF. Effet audible à comparer dans Colab; aucune amélioration garantie.
+
+### Vtest — renfort ciblé des pleurs (2026-10-05)
+
+- À la demande de l'utilisateur, gain bodytalk maximal par défaut porté de +3,5 à +4 dB dans Vtest seulement. Même sélection de mouvements, mêmes veto humain/ambiant et limite de crête; le supplément effectif dépend du masque et de la marge disponible. Tests du supplément +0,5 dB, de l'application unique et de la limite de crête.
+- Après comparaison favorable de l'utilisateur : retrait prioritaire des pleurs/sanglots/gémissements (classes YAMNet 19–22), slider 95 %, renfort dans les résidus et veto du gain bodytalk. Aucun changement de Bandit, du workflow ou de V3.5.1. Réglage 0 pour désactiver les deux ajouts ciblés.
+- Tests dédiés de ciblage, désactivation et protection contre le boost. Vérification du découpage avec queue artificiellement trop longue : longueurs source préservées. Incident des trois clips longs non reproduit, cause inconnue sans fichiers ou manifeste; aucun raccourcissement arbitraire appliqué.
+
+### Comparatif Vtest — Bandit v2 dans Colab (2026-10-03)
+
+- Notebook autonome `Colab_Backend_PFX_Vtest.ipynb`; V3.5.1 de production conservée sans modification.
+- Séparation remplacée par le SFX de Bandit v2 multilingue officiel / DnR v3. Aucun MVSEP, aucune API de traitement externe; ce n'est pas DnR-nonverbal. Finition YAMNet et réglages bodytalk/denoise conservés.
+- Sources épinglées, poids vérifiés, preflight réel, échecs sans bypass; reconstruction mono 48 kHz à durée exacte et timecodes BWF conservés.
+- Workflow identique à V3.5.1 : WAV dans `2_Environnements_IA`, puis bouton ZIP/PTX habituel du frontend. Dossier de comparaison séparé retiré à la demande de l'utilisateur; conserver la première livraison avant que le prochain run remplace les WAV de même nom. Manifeste hors livraison dans la cache modèle; aucun ZIP Colab séparé. Aucun changement frontend, pt_api ou requirements locaux.
+- Tests de reconstruction, appels réseau du runtime, cohérence notebook/runtime, référence inchangée et export BWF réel ajoutés. Qualité auditive et exécution T4 à confirmer sur le projet de comparaison.
+
 ### Documentation et entretien du dépôt (2026-10-03)
 
 - V3.5.1 présentée comme version courante; les versions évolueront au fil des améliorations, sans statut « essai ».

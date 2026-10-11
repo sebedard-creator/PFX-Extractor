@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import drive_auth
+from tests.wav_fixtures import wave_bytes
 
 
 class ExplosiveProgress:
@@ -36,7 +37,7 @@ class FakeDownload:
 
     def next_chunk(self):
         if not self.done:
-            self.handle.write(b"WAV")
+            self.handle.write(wave_bytes())
             self.done = True
         return None, True
 
@@ -70,7 +71,7 @@ class DriveProgressTests(unittest.TestCase):
                 paths, result = drive_auth.download_processed_files(progress=progress)
 
             self.assertEqual(result["count"], 1)
-            self.assertEqual(paths[0].read_bytes(), b"WAV")
+            self.assertEqual(paths[0].read_bytes(), wave_bytes())
             self.assertEqual(
                 progress.calls,
                 [

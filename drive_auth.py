@@ -2,8 +2,12 @@ import io
 import os
 import shutil
 import zipfile
+import json
+import tempfile
 from datetime import datetime
 from pathlib import Path
+from delivery_contract import (DELIVERY_MANIFEST, validate_delivery_manifest,
+                               verify_delivery_file, verify_unique_wave_umids)
 
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
@@ -227,6 +231,13 @@ def download_processed_files(progress=None):
     _, _, processed_folder_id = get_pfx_folders(service)
 
     files = _list_files_in_folder(service, processed_folder_id)
+    pointers = [item for item in files if item['name'] == DELIVERY_MANIFEST]
+    if pointers:
+        if len(pointers) != 1:
+            raise ValueError('Plusieurs manifestes de livraison sur Drive; lot ambigu.')
+        return _download_verified_generation(service, processed_folder_id, pointers[0], progress)
+    files = [item for item in files if item['name'].lower().endswith('.wav')
+             and not item['name'].startswith('._')]
     if not files:
         return [], {"count": 0, "names": []}
 
@@ -251,11 +262,75 @@ def download_processed_files(progress=None):
 
         downloaded_paths.append(destination)
 
+    verify_unique_wave_umids(downloaded_paths)
     _report_progress(progress, 1.0, "Fichiers traites telecharges")
 
     return downloaded_paths, {
         "count": len(downloaded_paths),
         "names": [path.name for path in downloaded_paths],
+        "verified": False,
+    }
+
+
+def _download_verified_generation(service, parent_id, pointer, progress=None):
+    """Fail closed for V3; preserve previous local delivery until all checks pass."""
+    content = service.files().get_media(fileId=pointer['id']).execute()
+    manifest = json.loads(content)
+    outputs = validate_delivery_manifest(manifest)
+    query = (f"'{_escape_query(parent_id)}' in parents and trashed=false and "
+             f"name='{_escape_query(manifest['run_folder'])}' and "
+             "mimeType='application/vnd.google-apps.folder'")
+    folders = service.files().list(q=query, fields='files(id,name)', pageSize=1000).execute().get('files', [])
+    if len(folders) != 1:
+        raise ValueError('Dossier du lot absent ou ambigu.')
+    items = _list_files_in_folder(service, folders[0]['id'])
+    by_name = {}
+    for item in items:
+        if item['name'].lower().endswith('.wav'):
+            if item['name'].casefold() in by_name:
+                raise ValueError('WAV dupliqué dans le lot Drive.')
+            by_name[item['name'].casefold()] = item
+    if set(by_name) != {entry['name'].casefold() for entry in outputs}:
+        raise ValueError('Liste des WAV différente du manifeste; livraison refusée.')
+    # TemporaryDirectory removes only this call's staging on failure, never old results.
+    with tempfile.TemporaryDirectory(prefix='download_v3_', dir=WORK_DIR) as temporary:
+        staging = Path(temporary) / 'processed'
+        staging.mkdir()
+        for index, entry in enumerate(outputs):
+            _report_progress(progress, index / len(outputs), f"Vérification {index + 1}/{len(outputs)}: {entry['name']}")
+            destination = staging / entry['name']
+            request = service.files().get_media(fileId=by_name[entry['name'].casefold()]['id'])
+            with destination.open('wb') as handle:
+                downloader = MediaIoBaseDownload(handle, request)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+            verify_delivery_file(destination, entry)
+        verify_unique_wave_umids([staging / e['name'] for e in outputs],
+                                 forbidden=[e['umid'] for e in manifest.get('inputs', []) if 'umid' in e])
+        # Detect a run switch/failure during download, including a replaced pointer file.
+        current = [item for item in _list_files_in_folder(service, parent_id)
+                   if item['name'] == DELIVERY_MANIFEST]
+        if len(current) != 1:
+            raise ValueError('Manifeste modifié pendant le téléchargement.')
+        latest = service.files().get_media(fileId=current[0]['id']).execute()
+        if json.loads(latest) != manifest:
+            raise ValueError('Le traitement a changé pendant le téléchargement; recommencez après sa fin.')
+        (staging / DELIVERY_MANIFEST).write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+        backup = None
+        if PROCESSED_DIR.exists():
+            backup = Path(tempfile.mkdtemp(prefix='processed_previous_', dir=WORK_DIR)) / 'processed'
+            PROCESSED_DIR.rename(backup)
+        try:
+            staging.rename(PROCESSED_DIR)
+        except Exception:
+            if backup is not None:
+                backup.rename(PROCESSED_DIR)
+            raise
+    _report_progress(progress, 1.0, 'Lot complet vérifié : empreintes, durées, timecodes et UMID distincts')
+    return [PROCESSED_DIR / e['name'] for e in outputs], {
+        'count': len(outputs), 'names': [e['name'] for e in outputs],
+        'verified': True, 'run_id': manifest['run_id'],
     }
 
 

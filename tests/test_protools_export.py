@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 
 import protools_export
+from tests.wav_fixtures import wave_bytes
 
 
 class ProcessedManifestTests(unittest.TestCase):
@@ -77,7 +78,7 @@ class ProToolsDeliveryTests(unittest.TestCase):
                 "A144_Boom-Gain_02_PFX_Ready.wav",
             ]
             for name in source_names:
-                (processed / name).write_bytes(name.encode("utf-8"))
+                (processed / name).write_bytes(wave_bytes(identity=name))
 
             def fake_builder(template_path, descriptors, output_dir, session_name=None):
                 self.assertEqual(Path(template_path), template)
@@ -127,7 +128,7 @@ class ProToolsDeliveryTests(unittest.TestCase):
             processed.mkdir()
             template = root / "template.ptx"
             template.write_bytes(b"template")
-            (processed / "A144_Boom-Gain_01_PFX_Ready.wav").write_bytes(b"wav")
+            (processed / "A144_Boom-Gain_01_PFX_Ready.wav").write_bytes(wave_bytes())
 
             def failing_builder(template_path, descriptors, output_dir, session_name=None):
                 output_dir = Path(output_dir)
@@ -156,7 +157,7 @@ class ProToolsDeliveryTests(unittest.TestCase):
             template = root / "template.ptx"
             template.write_bytes(b"template")
             source = processed / "A144_Boom-Gain_01_PFX_Ready.wav"
-            source.write_bytes(b"wav")
+            source.write_bytes(wave_bytes())
             original_archive = exports / "A144_PFX.zip"
             original_archive.write_bytes(b"existing")
 
