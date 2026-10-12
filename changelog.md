@@ -2,9 +2,27 @@
 
 ## Unreleased
 
+### Noms explicites des backends utilisables (2026-10-12)
+
+- Deux variantes distribuées au choix : `Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb` et `Colab_Backend_PFX_Bandit_V4.ipynb`. Bandit quitte la désignation « Test »; modèles, DSP et réglages inchangés. Nouveau label de manifeste Bandit_V4, protocole2 identique et anciens lots compatibles.
+- Ancien `Colab_Backend_PFX_Vtest_V3.ipynb` conservé sur disque mais retiré du suivi Git et ajouté à .gitignore. Les tests de référence peuvent reconstruire son moteur depuis les sources conservées si ce notebook privé est absent.
+- Documentation et liens des deux backends actualisés; même sélection Colab et même bouton ZIP/PTX.
+
+### Version minimale Pro Tools API 1.6.2 (2026-10-12)
+
+- Dépendance épinglée au tag `v1.6.2` (commit `e0a7cb6ab645ee1a763ecea875f88344c496868d`), installée dans `.venv`. Le resolver refuse toute version inférieure à **1.6.2**, quelle que soit la source (paquet installé, `PT_API_PATH`, dépôt frère); les versions stables supérieures sont acceptées.
+- Messages et documentation actualisés. Tests des bornes de version et d'une vraie livraison synthétique à 131 clips, avec contrôle de l'ordre chronologique des événements sérialisés malgré les noms triés alphabétiquement.
+- Le correctif de playlist est fourni par la nouvelle release de l'API; aucun changement dans son dépôt ni dans les notebooks Colab. Redémarrer le frontend pour charger le nouveau paquet et le nouveau garde-fou.
+
+### Dépendance Pro Tools API 1.6.1 (2026-10-12)
+
+- `requirements.txt` épingle `pt_api` au tag GitHub `v1.6.1`, commit `8c91eb9e82d03bbaf629c901cc68a730fd96b046`, au lieu de `v1.3.8`. Paquet installé dans l'environnement local du frontend pour le prochain comparatif.
+- Le resolver exige au minimum 1.6.1, y compris via `PT_API_PATH` ou dépôt frère, et consigne version/chemin réellement chargés. Une API ancienne est refusée explicitement; priorité de résolution conservée.
+- Vérification de construction/relecture PTX synthétique avec l'API installée. Le problème utilisateur de timeline parfois incomplet reste à vérifier sur son lot réel après redémarrage du frontend. Aucun changement des traitements Colab ni du dépôt de l'API.
+
 ### Test V4 — Bandit et retrait humain cumulatif (2026-10-06)
 
-- Nouvelle copie `Colab_Backend_PFX_Vtest_V4.ipynb`, avec sources embarquées `backend_test/v4_processing.py` et `backend_test/v4_workflow.py`. Test V3 et V3.5.2 conservées.
+- Nouvelle copie `Colab_Backend_PFX_Bandit_V4.ipynb`, avec sources embarquées `backend_test/v4_processing.py` et `backend_test/v4_workflow.py`. Test V3 et V3.5.2 conservées.
 - Même séparation Bandit, pré-nettoyage 40 %, détection résiduelle avec gain maximal +18 dB, bodytalk maximal +4 dB et scènes indépendantes. La finition utilise les masques du brut sur les SFX, puis analyse le rendu déjà atténué et applique un deuxième retrait cumulatif, comme le principe de V3.5.2.
 - Maximum entre catégories au premier retrait, puis multiplication des deux passes : 95 % et 90 % peuvent atteindre environ −46 dB si les deux détections sont maximales. Le bodytalk est relevé une seule fois après le cumul, avec les veto et la marge locale de Test V3. Coût possible : perte accrue de Foley simultané.
 - Workflow ZIP/PTX et protocole 2 commun inchangés; aucune manipulation Drive en changeant de notebook. UMID uniques, N/TC/empreintes vérifiés, anciennes générations conservées, erreur de détecteur bloquante. Aucun changement dans pt_api.
@@ -12,7 +30,7 @@
 
 ### V3.5.2 — rétroportage UMID sur V3.5.1 (2026-10-06)
 
-- Nouveau `Colab_Backend_PFX_V3_5_2.ipynb`; V3.5.1 conservée à l'identique. Modèles, fonctions DSP, YAMNet et gain bodytalk (+3,5 dB) conservés. À la demande de l'utilisateur, pré-nettoyage par défaut abaissé de 58 % à 40 %, comme Test V3; autres réglages inchangés.
+- Nouveau `Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb`; V3.5.1 conservée à l'identique. Modèles, fonctions DSP, YAMNet et gain bodytalk (+3,5 dB) conservés. À la demande de l'utilisateur, pré-nettoyage par défaut abaissé de 58 % à 40 %, comme Test V3; autres réglages inchangés.
 - Exclusion de l'UMID du transfert FFmpeg, écriture binaire d'un nouvel identifiant UUID4 par rendu; contrôle du hash audio avant/après, relecture, unicité du lot et non-réutilisation des identités sources. Helpers identiques à ceux validés pour Test V3.
 - Export dans un fichier temporaire; FFmpeg doit réussir et les contrôles UMID passer avant remplacement du WAV final. Une erreur conserve le précédent fichier de destination.
 - Bascule automatique V3.5.2 ↔ Test V3 : protocole 2 commun, dossier par génération et pointeur running/failed/complete. Aucune manipulation manuelle du manifeste. Les anciens résultats sont conservés; les runs incomplets ou remplacés ne sont pas publiés.

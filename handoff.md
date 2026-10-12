@@ -1,15 +1,40 @@
 # Handoff - PFX Extractor
 
+## Date de session : 2026-10-12 — deux backends utilisables, nomenclature
+
+- Sur demande utilisateur, Test V3 reste locale mais n'est plus versionnée : git rm --cached uniquement et règle .gitignore dédiée. Aucun fichier local supprimé.
+- Backends renommés `Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb` et `Colab_Backend_PFX_Bandit_V4.ipynb`; tous deux utilisables au choix, pas des essais. Bandit titres/messages/label manifeste deviennent Bandit V4/Bandit_V4, protocole2 inchangé, anciennes générations compatibles. DSP et paramètres inchangés.
+- Liens/docs et tests adaptés. La référence Test V3 peut être reconstituée uniquement dans les tests depuis les sources embarquées/sources v3 conservées quand le notebook local ignoré est absent; aucun backport DSP ni changement frontend/API.
+
+## Date de session : 2026-10-12 — minimum absolu pt_api 1.6.2
+
+- L'utilisateur confirme que l'API est corrigée et demande >=1.6.2 obligatoire. Tag distant v1.6.2 vérifié, commit e0a7cb6ab645ee1a763ecea875f88344c496868d. requirements épinglé v1.6.2 et paquet mis à jour dans .venv.
+- MIN_PT_API_VERSION=(1,6,2), messages générés depuis cette constante; versions plus anciennes ou inconnues refusées, y compris tous les chemins locaux. Versions stables supérieures acceptées. Tests de bornes et vraie génération/relecture d'un lot synthétique131 avec ordre natif des événements contrôlé.
+- Aucun changement du dépôt API ou des notebooks. Frontend à redémarrer avant nouvelle livraison pour quitter les anciens modules en mémoire.
+
+## Date de session : 2026-10-12 — timeline arrêtée au clip 99, cause confirmée
+
+- Malgré pt_api 1.6.1 réellement chargée, la sortie BOOM_PFX_001 s'arrête dans Pro Tools à 10:33:13:16. PTX/ZIP/manifeste contiennent pourtant les 131 clips exacts jusqu'à 10:43:03:10; UMID uniques, géométries/empreintes cohérentes.
+- Ordre alphabétique strict des noms : 09,100..109,10,110..119,11,120..129,12,130,131,13..99. Quatre retours temporels en arrière; dernier événement physique =99, fin exactement10:33:13:16. API builder conserve cet ordre; reader trie par timestamp et validation par dictionnaire masque l'anomalie.
+- Diagnostic sous work/diagnostics/pt_api_1_6_1_timeline_20261012 : contrôle byte-identique, candidat avec seuls les événements 0x1050 réordonnés, médias copiés/hashés, 131 placements/IDs/durées/TC intacts. Seul root0x1054 diffère; no-op API byte-identique. Aucun chevauchement ni trou dans ce lot.
+- L'utilisateur confirme « ca fonctionne! » après test du candidat chronologique. Cause confirmée pour ce lot; save natif/réouverture encore non fournis. DIAGNOSTIC_POUR_AGENT_API.md et evidence.json actualisés pour l'agent API. Aucun changement de code pendant l'enquête; l'utilisateur veut confier le correctif à l'agent de l'API. Respecter le contrat générique et valider séparément la priorité des chevauchements.
+
+## Date de session : 2026-10-12 — dépendance pt_api 1.6.1
+
+- L'utilisateur rapporte parfois une timeline PTX incomplète et demande d'utiliser pt_api 1.6.1 pour son test. Tag distant confirmé, SHA 8c91eb9e82d03bbaf629c901cc68a730fd96b046. requirements auparavant v1.3.8, paquet absent de .venv; un nouveau processus chargeait déjà Y:\pt_api\pt_api.py version 1.6.1 par fallback. Ne pas affirmer que le bug venait nécessairement de la version.
+- requirements mis à v1.6.1, installation du seul paquet pt_api dans .venv. Resolver exige >=1.6.1 quelle que soit la source et log version/chemin. Ordre PT_API_PATH > installé > frère si absent conservé. Frontend à redémarrer pour éviter tout module conservé en mémoire. Pas de modification du dépôt API ni des notebooks.
+- Tests de résolution/version et test existant de vraie génération/relecture PTX synthétique. Validation manuelle du lot incomplet laissée au test utilisateur.
+
 ## Date de session : 2026-10-06 — Test V4 demandée pour le cumul humain
 
-- L'utilisateur veut une nouvelle copie de Test V3 avec la séquence de retrait cumulatif de V3.5.2, pour comparer les soupirs/respirations/chuchotements. Nouveau `Colab_Backend_PFX_Vtest_V4.ipynb`; V3/V3.5.2 préservées.
+- L'utilisateur veut une nouvelle copie de Test V3 avec la séquence de retrait cumulatif de V3.5.2, pour comparer les soupirs/respirations/chuchotements. Nouveau `Colab_Backend_PFX_Bandit_V4.ipynb`; V3/V3.5.2 préservées.
 - Bandit et paramètres conservés : pré-denoise 40 %, bodytalk +4 dB, gain d'écoute résiduel +18 dB. Finition : masques YAMNet du snapshot brut → premier retrait sur SFX → analyse résiduelle du rendu déjà atténué → deuxième retrait multiplicatif → bodytalk local une seule fois. Pas de réintroduction de Snowball/alignement. Masques du brut réanalysés scène par scène en remplacement de la passe SFX V3, sans accumulation mémoire.
 - Implémentation embarquée depuis backend_test/v4_processing.py et v4_workflow.py, contrat protocole 2 commun et identifiants Vtest_V4/2026-10-06-test-v4-cumulative. Même bouton ZIP/PTX, aucun manifeste à renommer, anciens résultats conservés. API intacte.
 - Tests dédiés tests/test_backend_vtest_v4.py : 8 réussis, dont workflow avec modèles simulés mais vraie finition/FFmpeg et contrôles N/TC/UMID. Le cumul 95 % × 90 % peut atteindre environ −46 dB, pas une garantie d'amélioration; Foley simultané possiblement davantage atténué. Validation auditive à réaliser par l'utilisateur sur Colab.
 
 ## Date de session : 2026-10-06 — V3.5.2 demandée
 
-- Nouveau `Colab_Backend_PFX_V3_5_2.ipynb` : V3.5.1 avec correction UMID uniquement côté traitement/export; pré-nettoyage ensuite ajusté à 40 % sur demande (contre 58 %), autres réglages inchangés, bodytalk +3,5 dB. V3.5.1 conservée (SHA256 FAF3695FBB4621ACF2852037992F6888C436CA8E962A5CC4C6B655E419973A7A). API intacte.
+- Nouveau `Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb` : V3.5.1 avec correction UMID uniquement côté traitement/export; pré-nettoyage ensuite ajusté à 40 % sur demande (contre 58 %), autres réglages inchangés, bodytalk +3,5 dB. V3.5.1 conservée (SHA256 FAF3695FBB4621ACF2852037992F6888C436CA8E962A5CC4C6B655E419973A7A). API intacte.
 - Export temporaire FFmpeg avec UMID supprimé des métadonnées, écriture UUID4 binaire et contrôles audio/identités avant publication. Helpers UMID identiques à `delivery_contract.py`. Tests dédiés : `tests/test_backend_v352.py`.
 - L'utilisateur refuse toute manipulation du manifeste en changeant de notebook. V3.5.2 publie désormais comme Test V3 via protocole 2 et run_<id>, pointeur commun et contrôles d'intégrité. Choisir l'un ou l'autre ipynb suffit. Anciens lots conservés. Helpers backend_test/v352_delivery.py + contrat complet embarqués. Tests des vrais workflows dans les deux sens avec modèles simulés. Pas de traitement concurrent; reprise exceptionnelle après confirmation de l'arrêt d'un run running interrompu. Aucun renommage manuel du manifeste entre ces deux notebooks.
 - L'utilisateur confirme que le téléchargement Test V3 est réglé après relance du frontend, préfère vitesse/body foley mais note encore des souffles; amplification détecteur +18 dB toujours active. Cette demande ne modifie pas les réglages de Test V3. Pas de nouvelle validation auditive Colab locale.

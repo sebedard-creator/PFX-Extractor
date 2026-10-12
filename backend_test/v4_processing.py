@@ -1,4 +1,4 @@
-"""Test V4: Bandit SFX with successive raw-mask and residual attenuation."""
+"""Bandit V4: SFX with successive raw-mask and residual attenuation."""
 
 
 def finish_v4(stem_path, output_path, original_path):

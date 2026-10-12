@@ -1,10 +1,96 @@
 import tempfile
+import struct
 import unittest
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import protools_export
 from tests.wav_fixtures import wave_bytes
+
+
+class ApiResolutionTests(unittest.TestCase):
+    def module(self, version):
+        return SimpleNamespace(__version__=version, __file__='installed/pt_api.py',
+                               build_audio_session=Mock())
+
+    def test_installed_release_is_used_and_logged(self):
+        module = self.module('1.6.2')
+        with patch.dict(protools_export.os.environ, {}, clear=True), \
+             patch.object(protools_export.importlib, 'import_module', return_value=module), \
+             self.assertLogs('pfx_extractor', level='INFO') as logs:
+            self.assertIs(protools_export.resolve_pt_api_builder(), module.build_audio_session)
+        self.assertIn('pt_api 1.6.2', logs.output[0])
+        self.assertIn('installed/pt_api.py', logs.output[0])
+
+    def test_old_installed_api_does_not_silently_fall_back(self):
+        with patch.dict(protools_export.os.environ, {}, clear=True), \
+             patch.object(protools_export.importlib, 'import_module', return_value=self.module('1.6.1')), \
+             patch.object(protools_export, '_load_pt_api_from_file') as fallback:
+            with self.assertRaisesRegex(RuntimeError, '1.6.2.*1.6.1'):
+                protools_export.resolve_pt_api_builder()
+            fallback.assert_not_called()
+
+    def test_explicit_local_override_must_also_meet_version_requirement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'pt_api.py'
+            path.write_text("__version__ = '1.6.1'\ndef build_audio_session(*args): pass\n")
+            with patch.dict(protools_export.os.environ, {'PT_API_PATH': str(path)}):
+                with self.assertRaisesRegex(RuntimeError, '1.6.2.*1.6.1'):
+                    protools_export.resolve_pt_api_builder()
+
+    def test_missing_version_and_builder_are_explicit_errors(self):
+        with self.assertRaisesRegex(RuntimeError, 'inconnue'):
+            protools_export._validated_pt_api_builder(self.module(None))
+        module = self.module('1.6.2')
+        module.build_audio_session = None
+        with self.assertRaisesRegex(RuntimeError, 'build_audio_session'):
+            protools_export._validated_pt_api_builder(module)
+
+    def test_later_stable_releases_are_accepted_and_older_ones_rejected(self):
+        for version in ('1.6.2', '1.6.3', '1.7.0', '2.0.0'):
+            with self.subTest(version=version):
+                module = self.module(version)
+                self.assertIs(protools_export._validated_pt_api_builder(module), module.build_audio_session)
+        for version in ('1.3.8', '1.6.0', '1.6.1'):
+            with self.subTest(version=version), self.assertRaisesRegex(RuntimeError, '1.6.2.*requis'):
+                protools_export._validated_pt_api_builder(self.module(version))
+
+
+class ApiRealIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(protools_export.DEFAULT_TEMPLATE_PATH.is_file(), 'local PTX template required')
+    def test_131_alphabetical_inputs_have_chronological_serialized_events(self):
+        try:
+            builder = protools_export.resolve_pt_api_builder()
+        except RuntimeError as exc:
+            self.skipTest(str(exc))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            processed = root / 'processed'
+            processed.mkdir()
+            for sequence in range(1, 132):
+                name = f'Scene_Boom-Gain_{sequence:02d}_PFX_Ready.wav'
+                (processed / name).write_bytes(wave_bytes(
+                    n=4800, tc=1728000000 + (sequence - 1) * 4800, identity=name))
+            result = protools_export.create_protools_delivery(
+                processed, root / 'exports', session_name='Chronological_131', builder=builder)
+            session = builder.__globals__['ProToolsSession'](result['session_path'])
+            block_type = builder.__globals__['PTBlock']
+            clips = session.get_timeline_clips(include_fades=False)
+            self.assertEqual(len(clips), 131)
+            self.assertEqual(max(c['end_samples'] for c in clips), 1728000000 + 131 * 4800)
+            count = 0
+            for playlist, _, _ in session._validated_main_playlists():
+                starts = []
+                for event in playlist.items:
+                    if isinstance(event, block_type) and event.content_type == 0x1050:
+                        payload = next(b for b in event.items
+                                       if isinstance(b, block_type) and b.content_type == 0x104f)
+                        starts.append(struct.unpack_from('<Q', payload.items[0], 7)[0])
+                self.assertEqual(starts, sorted(starts))
+                count += len(starts)
+            self.assertEqual(count, 131)
 
 
 class ProcessedManifestTests(unittest.TestCase):

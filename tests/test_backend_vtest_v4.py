@@ -165,7 +165,7 @@ class V4Tests(unittest.TestCase):
                 else:
                     exec(compile(workflow, '<v4workflow>', 'exec'), env)
                 manifest = json.loads((Path(env['FOLDER_OUT']) / contract.DELIVERY_MANIFEST).read_text())
-                self.assertEqual(manifest['backend'], 'Vtest_V4')
+                self.assertEqual(manifest['backend'], 'Bandit_V4')
                 self.assertEqual(manifest['status'], 'failed' if failure else 'complete')
                 self.assertEqual(env['WORKFLOW_COMPLETE'], not failure)
                 self.assertEqual(observations, [Path(env['FOLDER_MERGED']) / raw.name] * 2)

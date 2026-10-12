@@ -9,7 +9,7 @@ inputs_manifest = preflight_v4_inputs()  # Names, mono/48k, exact duration and B
 run_folder = 'run_' + RUN_ID
 run_path = Path(FOLDER_OUT) / run_folder
 run_path.mkdir(exist_ok=False)
-manifest = {'protocol': 2, 'backend': 'Vtest_V4', 'revision': '2026-10-06-test-v4-cumulative',
+manifest = {'protocol': 2, 'backend': 'Bandit_V4', 'revision': '2026-10-06-test-v4-cumulative',
             'run_id': RUN_ID, 'run_folder': run_folder, 'status': 'running',
             'inputs': inputs_manifest,
             'settings': {k: v for k, v in list(globals().items())
@@ -69,7 +69,7 @@ try:
         raise RuntimeError('Un autre traitement a remplacé le pointeur; publication refusée.')
     write_delivery_manifest(pointer, manifest)
     WORKFLOW_COMPLETE = True
-    print('🎉 Test V4 terminé. Téléchargez avec le bouton ZIP/PTX du frontend MIS À JOUR.')
+    print('🎉 Bandit V4 terminé. Téléchargez avec le bouton ZIP/PTX du frontend MIS À JOUR.')
 except Exception:
     manifest['status'] = 'failed'
     current = json.loads(pointer.read_text(encoding='utf-8'))

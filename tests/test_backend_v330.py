@@ -12,7 +12,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def notebook(version='3_5_1'):
-    return json.loads((ROOT / f'Colab_Backend_PFX_V{version}.ipynb').read_text(encoding='utf-8'))
+    filenames = {
+        '3_5_2': 'Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb',
+        'test_V4': 'Colab_Backend_PFX_Bandit_V4.ipynb',
+    }
+    path = ROOT / filenames.get(version, f'Colab_Backend_PFX_V{version}.ipynb')
+    if version == 'test_V3' and not path.exists():
+        # The private old notebook is ignored by Git. Keep its reference DSP tests
+        # runnable on a clean checkout using the retained, synchronized sources.
+        nb = notebook('test_V4')
+        v4 = (ROOT / 'backend_test/v4_processing.py').read_text(encoding='utf-8').strip()
+        v3 = (ROOT / 'backend_test/v3_processing.py').read_text(encoding='utf-8').strip()
+        engine = ''.join(nb['cells'][6]['source'])
+        if v4 not in engine:
+            raise ValueError('Bandit notebook and embedded finishing source differ.')
+        nb['cells'][6]['source'] = engine.replace(v4, v3).splitlines(keepends=True)
+        nb['cells'][7]['source'] = (ROOT / 'backend_test/v3_workflow.py').read_text(
+            encoding='utf-8').splitlines(keepends=True)
+        return nb
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def scope(version='3_5_1'):

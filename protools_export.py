@@ -2,6 +2,7 @@
 
 import importlib
 import importlib.util
+import logging
 import os
 import re
 import shutil
@@ -17,6 +18,9 @@ from delivery_contract import (DELIVERY_MANIFEST, validate_delivery_manifest,
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_TEMPLATE_PATH = BASE_DIR / "template.ptx"
 DEFAULT_TRACK_NAMES = ("PFX 01", "PFX 02")
+MIN_PT_API_VERSION = (1, 6, 2)
+MIN_PT_API_VERSION_TEXT = ".".join(map(str, MIN_PT_API_VERSION))
+logger = logging.getLogger("pfx_extractor")
 
 _PROCESSED_FILENAME = re.compile(
     r"^(?P<family>.+)-Gain_(?P<sequence>\d+)_PFX_Ready\.wav$",
@@ -43,6 +47,23 @@ def _path_from_value(value):
     return Path(candidate) if candidate else None
 
 
+def _validated_pt_api_builder(module):
+    """Refuse an older API even when a development override bypasses pip."""
+    version = getattr(module, "__version__", None)
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version) if isinstance(version, str) else None
+    if match is None or tuple(map(int, match.groups())) < MIN_PT_API_VERSION:
+        raise RuntimeError(
+            f"pt_api {MIN_PT_API_VERSION_TEXT}+ requis; version chargée : {version or 'inconnue'} "
+            f"({getattr(module, '__file__', 'chemin inconnu')}). "
+            "Mettez à jour la dépendance ou PT_API_PATH, puis redémarrez le frontend."
+        )
+    builder = getattr(module, "build_audio_session", None)
+    if not callable(builder):
+        raise RuntimeError("Le module pt_api chargé ne fournit pas build_audio_session().")
+    logger.info("Export Pro Tools : pt_api %s chargé depuis %s", version, module.__file__)
+    return builder
+
+
 def _load_pt_api_from_file(module_path):
     module_path = Path(module_path).resolve()
     if module_path.is_dir():
@@ -57,8 +78,7 @@ def _load_pt_api_from_file(module_path):
         return None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    builder = getattr(module, "build_audio_session", None)
-    return builder if callable(builder) else None
+    return _validated_pt_api_builder(module)
 
 
 def resolve_pt_api_builder():
@@ -77,9 +97,7 @@ def resolve_pt_api_builder():
     except ImportError:
         module = None
     if module is not None:
-        builder = getattr(module, "build_audio_session", None)
-        if callable(builder):
-            return builder
+        return _validated_pt_api_builder(module)
 
     sibling_module = BASE_DIR.parent / "pt_api" / "pt_api.py"
     builder = _load_pt_api_from_file(sibling_module)
@@ -87,7 +105,7 @@ def resolve_pt_api_builder():
         return builder
 
     raise RuntimeError(
-        "pt_api 1.3.8+ est introuvable. Installez le paquet ou définissez "
+        f"pt_api {MIN_PT_API_VERSION_TEXT}+ est introuvable. Installez le paquet ou définissez "
         "PT_API_PATH vers pt_api.py."
     )
 
