@@ -59,6 +59,8 @@ If download or export fails, inspect the status and `work/app.log`. Check that C
 
 Technical details: [architecture.md](architecture.md). Version history: [changelog.md](changelog.md).
 
+Historical notebooks V3.5.1 and Test V3 are local-only archives, excluded from Git. The two supported backends are linked above.
+
 ## License
 
 Created by **Sébastien Bédard / sebedard-creator**. Use, modification and redistribution are governed by the [Attribution Assurance License](LICENSE).

@@ -26,6 +26,8 @@ class BackendV352Tests(unittest.TestCase):
                    RENDER_UMID_PREFIX=contract.RENDER_UMID_PREFIX)
         return env
 
+    @unittest.skipUnless((Path(__file__).resolve().parents[1] / 'Colab_Backend_PFX_V3_5_1.ipynb').is_file(),
+                         'private historical notebook required for baseline comparison')
     def test_unchanged_dsp_and_settings(self):
         old, new = notebook('3_5_1'), notebook('3_5_2')
         for i in (2, 3, 4, 5):

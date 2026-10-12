@@ -22,5 +22,6 @@ template.ptx
 # Google Colab temp files (si jamais téléchargés)
 *.tmp
 
-# Ancienne variante expérimentale conservée uniquement en local
+# Anciens backends conservés uniquement en local
 /Colab_Backend_PFX_Vtest_V3.ipynb
+/Colab_Backend_PFX_V3_5_1.ipynb

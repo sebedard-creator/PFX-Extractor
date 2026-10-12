@@ -11,7 +11,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def notebook(version='3_5_1'):
+def notebook(version='3_5_2'):
     filenames = {
         '3_5_2': 'Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb',
         'test_V4': 'Colab_Backend_PFX_Bandit_V4.ipynb',
@@ -33,7 +33,7 @@ def notebook(version='3_5_1'):
     return json.loads(path.read_text(encoding='utf-8'))
 
 
-def scope(version='3_5_1'):
+def scope(version='3_5_2'):
     nb = notebook(version)
     env = {'np': np, 'os': os, 'print': lambda *args, **kwargs: None}
     # N'exécuter que fonctions et constantes pures : aucun téléchargement / modèle / audio.
