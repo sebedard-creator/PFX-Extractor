@@ -376,18 +376,25 @@ def download_processed_as_zip(progress=None):
     return str(zip_path), result
 
 
-def clear_local_cache(include_runtime=False):
+def clear_local_cache(include_runtime=False, progress=None, failed=None):
     ensure_work_dirs()
     deleted = 0
-    for folder in [RAW_DIR, PROCESSED_DIR, EXPORTS_DIR]:
-        deleted += _clear_directory_contents(folder)
+    folders = [RAW_DIR, PROCESSED_DIR, EXPORTS_DIR]
     if include_runtime:
-        deleted += _clear_directory_contents(GRADIO_TEMP_DIR)
+        folders.append(GRADIO_TEMP_DIR)
+    for index, folder in enumerate(folders):
+        base, span = index / len(folders), 1 / len(folders)
+        _report_progress(progress, base, f"Local / {folder.name} : inventaire des fichiers...")
+        def folder_progress(value, *, desc):
+            _report_progress(progress, base + span * value, desc)
+        deleted += _clear_directory_contents(folder, progress=folder_progress, failed=failed)
+        _report_progress(progress, base + span, f"Local / {folder.name} : terminé")
     ensure_work_dirs()
     return deleted
 
 
 def clear_drive_cache(progress=None):
+    _report_progress(progress, 0.0, "Connexion à Google Drive pour le nettoyage...")
     service = authenticate_drive()
     _, raw_folder_id, processed_folder_id = get_pfx_folders(service)
 
@@ -399,15 +406,16 @@ def clear_drive_cache(progress=None):
     ]
 
     for folder_index, (folder_name, folder_id) in enumerate(folders, start=1):
+        base = (folder_index - 1) / len(folders)
+        span = 1 / len(folders)
+        _report_progress(progress, base, f"Drive / {folder_name} : inventaire des fichiers...")
         files = _list_files_in_folder(service, folder_id)
         total = len(files)
         for file_index, item in enumerate(files, start=1):
-            base = (folder_index - 1) / len(folders)
-            span = 1 / len(folders)
             _report_progress(
                 progress,
                 base + (file_index - 1) / max(total, 1) * span,
-                f"Effacement Drive {folder_name}: {file_index}/{total}",
+                f"Drive / {folder_name} : suppression {file_index}/{total} — {item['name']}",
             )
             try:
                 service.files().delete(
@@ -415,41 +423,102 @@ def clear_drive_cache(progress=None):
                     supportsAllDrives=True,
                 ).execute()
                 deleted += 1
+                _report_progress(progress, base + file_index / total * span,
+                                 f"Drive : {deleted} fichier(s) supprimé(s) — {item['name']}")
             except HttpError as exc:
                 failed.append(f"{folder_name}/{item.get('name', item['id'])}: {exc}")
+                _report_progress(progress, base + file_index / total * span,
+                                 f"Drive : non supprimé — {item.get('name', item['id'])}")
             except Exception as exc:
                 failed.append(f"{folder_name}/{item.get('name', item['id'])}: {exc}")
+                _report_progress(progress, base + file_index / total * span,
+                                 f"Drive : non supprimé — {item.get('name', item['id'])}")
+        _report_progress(progress, base + span, f"Drive / {folder_name} : terminé"
+                         if total else f"Drive / {folder_name} : aucun fichier à supprimer")
 
-    _report_progress(progress, 1.0, "Cache effacee")
+    _report_progress(progress, 1.0, f"Drive : {deleted} fichier(s) supprimé(s), {len(failed)} erreur(s)")
 
     return {"deleted": deleted, "failed": failed}
 
 
 def clear_all_cache(progress=None, include_runtime=False):
-    drive_result = clear_drive_cache(progress=progress)
-    local_deleted = clear_local_cache(include_runtime=include_runtime)
+    def drive_progress(value, *, desc):
+        _report_progress(progress, .75 * value, desc)
+    def local_progress(value, *, desc):
+        _report_progress(progress, .75 + .25 * value, desc)
+    drive_result = clear_drive_cache(progress=drive_progress)
+    local_failed = []
+    local_deleted = clear_local_cache(include_runtime=include_runtime,
+                                      progress=local_progress, failed=local_failed)
+    _report_progress(progress, 1.0,
+                     f"Nettoyage terminé : {drive_result['deleted']} fichier(s) Drive, "
+                     f"{local_deleted} élément(s) local(aux), "
+                     f"{len(drive_result['failed']) + len(local_failed)} erreur(s)")
     return {
         "local_deleted": local_deleted,
         "drive_deleted": drive_result["deleted"],
         "drive_failed": drive_result["failed"],
+        "local_failed": local_failed,
     }
 
 
-def _clear_directory_contents(folder):
+def _clear_directory_contents(folder, progress=None, failed=None):
     ensure_work_dirs()
-    folder = Path(folder).resolve()
+    selected_folder = Path(folder)
+    if selected_folder.exists() and (selected_folder.is_symlink()
+            or getattr(selected_folder.lstat(), 'st_file_attributes', 0) & 0x400):
+        raise RuntimeError(f"Refus d'effacer une racine de cache liée: {selected_folder}")
+    folder = selected_folder.resolve()
     work_root = WORK_DIR.resolve()
-    if folder != work_root and work_root not in folder.parents:
+    if folder == work_root or work_root not in folder.parents:
         raise RuntimeError(f"Refus d'effacer hors du dossier de travail: {folder}")
 
     deleted = 0
     if not folder.exists():
         return deleted
 
-    for child in folder.iterdir():
-        if child.is_dir():
-            shutil.rmtree(child)
-        else:
-            child.unlink()
-        deleted += 1
+    def is_link(path):
+        return path.is_symlink() or bool(getattr(path.lstat(), 'st_file_attributes', 0) & 0x400)
+    def check_target(path):
+        # Links themselves can be removed, but their targets must never be traversed.
+        resolved = path.parent.resolve() if is_link(path) else path.resolve()
+        if resolved != folder and folder not in resolved.parents:
+            raise RuntimeError(f"Refus d'effacer hors du cache sélectionné: {path}")
+    targets = []
+    def inventory(directory):
+        for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
+            check_target(child)
+            if child.is_dir() and not is_link(child):
+                inventory(child)
+            targets.append(child)
+    try:
+        inventory(folder)
+    except Exception as exc:
+        if failed is None:
+            raise
+        failed.append(f"{folder}: inventaire impossible : {exc}")
+        _report_progress(progress, 1.0, f"Local / {folder.name} : inventaire impossible")
+        return deleted
+    total = len(targets)
+    for index, child in enumerate(targets, start=1):
+        label = f"Local / {folder.name}/{child.relative_to(folder)}"
+        _report_progress(progress, (index - 1) / total, f"{label} : suppression {index}/{total}")
+        try:
+            check_target(child)
+            if child.is_symlink():
+                child.unlink()
+            elif child.is_dir():
+                child.rmdir()  # Also removes a Windows junction without following it.
+            else:
+                child.unlink()
+            deleted += 1
+            description = f"{label} : supprimé ({deleted}/{total})"
+        except Exception as exc:
+            if failed is None:
+                raise
+            failed.append(f"{child}: {exc}")
+            description = f"{label} : non supprimé"
+        _report_progress(progress, index / total, description)
+    if not total:
+        _report_progress(progress, 1.0, f"Local / {folder.name} : cache déjà vide")
     return deleted

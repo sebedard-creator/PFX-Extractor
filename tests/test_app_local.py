@@ -34,6 +34,24 @@ class UploadProgressTests(unittest.TestCase):
         self.assertIsNone(cleared_files)
 
 
+class CacheProgressTests(unittest.TestCase):
+    def test_cleanup_callback_forwards_progress_and_displays_partial_results(self):
+        from tests.test_drive_auth import ExplosiveProgress
+        progress=ExplosiveProgress()
+        with patch.object(app_local.drive_auth,'clear_all_cache',return_value={
+                'local_deleted':5,'drive_deleted':10,
+                'local_failed':['locked.zip'],'drive_failed':['BOOM_03.wav']}) as clear:
+            status,files,archive,confirmation=app_local.clear_cache(progress=progress)
+        clear.assert_called_once_with(include_runtime=True,progress=progress)
+        self.assertIn('terminé avec des erreurs',status)
+        self.assertIn('locked.zip',status)
+        self.assertIn('BOOM_03.wav',status)
+        self.assertIn('5',status)
+        self.assertIn('10',status)
+        self.assertIsNone(files)
+        self.assertIsNone(archive)
+
+
 class CombinedDownloadTests(unittest.TestCase):
     @patch("app_local.protools_export.create_protools_delivery")
     @patch("app_local.drive_auth.download_processed_files")

@@ -148,5 +148,126 @@ class DriveProgressTests(unittest.TestCase):
         self.assertEqual(checks, [])
 
 
+class CacheProgressTests(unittest.TestCase):
+    def test_drive_reports_names_successes_failures_and_empty_folder(self):
+        progress = ExplosiveProgress()
+        service = Mock()
+        service.files.return_value.delete.return_value.execute.side_effect = [None, RuntimeError('locked')]
+        with patch.object(drive_auth, 'authenticate_drive', return_value=service), \
+             patch.object(drive_auth, 'get_pfx_folders', return_value=('parent','raw','out')), \
+             patch.object(drive_auth, '_list_files_in_folder', side_effect=[
+                 [{'id':'one','name':'BOOM_01.wav'}, {'id':'two','name':'BOOM_02.wav'}], []]):
+            result = drive_auth.clear_drive_cache(progress=progress)
+        self.assertEqual(result['deleted'], 1)
+        self.assertEqual(len(result['failed']), 1)
+        self.assertIn('BOOM_02.wav', result['failed'][0])
+        descriptions = [desc for _,desc in progress.calls]
+        self.assertTrue(any('BOOM_01.wav' in desc and 'supprimé' in desc for desc in descriptions))
+        self.assertTrue(any('BOOM_02.wav' in desc and 'non supprimé' in desc for desc in descriptions))
+        self.assertTrue(any('aucun fichier' in desc for desc in descriptions))
+        self.assertEqual(progress.calls[-1][0], 1)
+        service.files.return_value.delete.assert_any_call(fileId='one',supportsAllDrives=True)
+
+    def test_local_nested_cleanup_reports_each_item_and_retains_cache_root(self):
+        progress = ExplosiveProgress()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / 'processed'
+            audio = cache / 'Audio Files'
+            audio.mkdir(parents=True)
+            for path in (audio/'BOOM_01.wav', audio/'BOOM_02.wav', cache/'manifest.json'):
+                path.write_bytes(b'test')
+            with patch.object(drive_auth,'WORK_DIR',root), patch.object(drive_auth,'ensure_work_dirs'):
+                count = drive_auth._clear_directory_contents(cache,progress=progress)
+            self.assertEqual(count, 4)
+            self.assertTrue(cache.is_dir())
+            self.assertEqual(list(cache.iterdir()), [])
+            messages = [desc for _,desc in progress.calls]
+            self.assertTrue(any('BOOM_01.wav' in desc for desc in messages))
+            self.assertTrue(any('BOOM_02.wav' in desc for desc in messages))
+            fractions=[value for value,_ in progress.calls]
+            self.assertEqual(fractions,sorted(fractions))
+            self.assertEqual(fractions[-1],1)
+
+    def test_locked_local_file_is_reported_and_other_files_are_deleted(self):
+        progress, failed = ExplosiveProgress(), []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root/'exports'
+            cache.mkdir()
+            locked, other = cache/'locked.zip', cache/'other.zip'
+            locked.write_bytes(b'keep')
+            other.write_bytes(b'delete')
+            unlink = Path.unlink
+            def lock_one(path, *args, **kwargs):
+                if path == locked:
+                    raise PermissionError('file in use')
+                return unlink(path, *args, **kwargs)
+            with patch.object(drive_auth,'WORK_DIR',root), patch.object(drive_auth,'ensure_work_dirs'), \
+                 patch.object(Path,'unlink',lock_one):
+                count=drive_auth._clear_directory_contents(cache,progress=progress,failed=failed)
+            self.assertEqual(count,1)
+            self.assertEqual(locked.read_bytes(),b'keep')
+            self.assertFalse(other.exists())
+            self.assertEqual(len(failed),1)
+            self.assertTrue(any('non supprimé' in desc for _,desc in progress.calls))
+
+    def test_cleanup_refuses_work_root_and_paths_outside_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            work=root/'work'
+            outside=root/'outside'
+            work.mkdir()
+            outside.mkdir()
+            protected=outside/'keep.txt'
+            protected.write_text('keep')
+            with patch.object(drive_auth,'WORK_DIR',work), patch.object(drive_auth,'ensure_work_dirs'):
+                for path in (work,outside):
+                    with self.assertRaisesRegex(RuntimeError,'Refus'):
+                        drive_auth._clear_directory_contents(path)
+            self.assertEqual(protected.read_text(),'keep')
+
+    def test_nested_link_is_removed_without_touching_its_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            work=root/'work'
+            cache=work/'exports'
+            cache.mkdir(parents=True)
+            outside=root/'outside'
+            outside.mkdir()
+            protected=outside/'keep.txt'
+            protected.write_text('keep')
+            link=cache/'linked_folder'
+            try:
+                link.symlink_to(outside,target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f'Symlink creation unavailable: {exc}')
+            with patch.object(drive_auth,'WORK_DIR',work), patch.object(drive_auth,'ensure_work_dirs'):
+                count=drive_auth._clear_directory_contents(cache)
+            self.assertEqual(count,1)
+            self.assertFalse(link.exists())
+            self.assertEqual(protected.read_text(),'keep')
+
+    def test_aggregate_progress_covers_drive_then_local_and_keeps_failures(self):
+        progress=ExplosiveProgress()
+        def drive(*,progress):
+            progress(0,desc='Drive start')
+            progress(1,desc='Drive done')
+            return {'deleted':2,'failed':[]}
+        def local(*,include_runtime,progress,failed):
+            self.assertTrue(include_runtime)
+            progress(0,desc='Local start')
+            failed.append('locked local file')
+            progress(1,desc='Local done')
+            return 3
+        with patch.object(drive_auth,'clear_drive_cache',side_effect=drive), \
+             patch.object(drive_auth,'clear_local_cache',side_effect=local):
+            result=drive_auth.clear_all_cache(progress=progress,include_runtime=True)
+        self.assertEqual(result,{'drive_deleted':2,'drive_failed':[],
+                                 'local_deleted':3,'local_failed':['locked local file']})
+        self.assertEqual([v for v,_ in progress.calls],[0,.75,.75,1,1])
+        self.assertIn('1 erreur',progress.calls[-1][1])
+
+
 if __name__ == "__main__":
     unittest.main()

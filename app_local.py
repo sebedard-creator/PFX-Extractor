@@ -213,9 +213,10 @@ def hide_clear_confirmation():
     return gr.update(visible=False)
 
 
-def clear_cache():
+def clear_cache(progress=gr.Progress()):
     try:
-        result = drive_auth.clear_all_cache(include_runtime=True)
+        progress(0.0, desc="Connexion à Google Drive pour le nettoyage...")
+        result = drive_auth.clear_all_cache(include_runtime=True, progress=progress)
     except Exception as exc:
         logger.exception("Echec de l'effacement de la cache.")
         drive_auth.ensure_work_dirs()
@@ -227,12 +228,17 @@ def clear_cache():
         )
         return status, None, None, gr.update(visible=False)
 
+    local_failed = result.get("local_failed", [])
+    has_errors = bool(local_failed or result["drive_failed"])
     status = (
-        "Cache effacee.\n"
+        ("Nettoyage terminé avec des erreurs.\n" if has_errors else "Caches actifs nettoyés.\n")
+        +
         f"Elements locaux supprimes: {result['local_deleted']}\n"
         f"Fichiers Drive supprimes: {result['drive_deleted']}\n"
         f"Dossier conserve: {drive_auth.WORK_DIR}"
     )
+    if local_failed:
+        status += "\n\nÉléments locaux non supprimés:\n" + _names_preview(local_failed, limit=5)
     if result["drive_failed"]:
         status += (
             "\n\nCertains fichiers Drive n'ont pas pu etre supprimes:\n"

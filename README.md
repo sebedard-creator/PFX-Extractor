@@ -49,7 +49,7 @@ Pro Tools export requires **[pt_api](https://github.com/sebedard-creator/pt_api)
 
 Switching backends requires no manual Drive changes. Previous output generations are retained; incomplete or inconsistent deliveries are refused. Run only one notebook at a time.
 
-Keep the ZIPs you need before using **Effacer la cache**: it removes local working files/exports and the Drive input/output folders after confirmation.
+Keep the ZIPs you need before using **Effacer la cache**: it removes active local working files/exports and root-level files in the Drive input/output folders after confirmation. Progress shows the current location, filename and deletion count; the final summary lists errors. Old Drive generation folders remain preserved.
 
 ## Files and troubleshooting
 

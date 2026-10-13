@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Progression du nettoyage des caches (2026-10-13)
+
+- Le bouton de confirmation transmet la progression Gradio : connexion/inventaire Drive, fichiers supprimés, puis nettoyage local. Noms, compteurs et bilan des erreurs affichés; la barre couvre les deux phases.
+- Suppression locale détaillée fichier par fichier dans les caches ciblés, avec maintien des dossiers racines, refus hors périmètre et traitement des liens sans suivre leur cible. Un fichier verrouillé est signalé; le nettoyage poursuit les autres éléments.
+- Périmètre Drive inchangé : fichiers à la racine des dossiers de travail; anciennes générations conservées. Aucun cache utilisateur réel supprimé pendant la vérification, tests locaux en répertoires temporaires et Drive simulé.
+
 ### Progression de l'upload Drive (2026-10-13)
 
 - Le bouton Upload transmet désormais l'objet de progression Gradio à Drive, comme le téléchargement ZIP. Affichage du fichier en cours, du pourcentage transféré et du nombre de fichiers envoyés.
