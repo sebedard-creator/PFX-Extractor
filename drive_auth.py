@@ -203,23 +203,45 @@ def upload_files(filepaths, progress=None):
         path = Path(filepath)
         if not path.exists() or not path.is_file():
             failed.append(f"{path}: fichier introuvable")
+            _report_progress(progress, index / total, f"Fichier {index}/{total} introuvable : {path.name}")
             continue
 
         _report_progress(
             progress,
             (index - 1) / max(total, 1),
-            f"Upload {index}/{total}: {path.name}",
+            f"Envoi {index}/{total} : {path.name} — {len(uploaded_names)} fichier(s) envoyé(s)",
         )
 
         metadata = {"name": path.name, "parents": [raw_folder_id]}
-        media = MediaFileUpload(str(path), mimetype="audio/wav", resumable=True)
+        media = None
         try:
-            service.files().create(body=metadata, media_body=media, fields="id").execute()
+            media = MediaFileUpload(str(path), mimetype="audio/wav",
+                                    chunksize=8 * 1024 * 1024, resumable=True)
+            request = service.files().create(body=metadata, media_body=media, fields="id")
+            response = None
+            while response is None:
+                chunk_status, response = request.next_chunk(num_retries=3)
+                if chunk_status is not None:
+                    fraction = min(1.0, max(0.0, chunk_status.progress()))
+                    _report_progress(
+                        progress, ((index - 1) + fraction) / total,
+                        f"Envoi {index}/{total} : {path.name} — {fraction:.0%} "
+                        f"({len(uploaded_names)} fichier(s) envoyé(s))",
+                    )
             uploaded_names.append(path.name)
+            _report_progress(progress, index / total,
+                             f"{len(uploaded_names)}/{total} fichier(s) envoyé(s) — {path.name}")
         except Exception as exc:
             failed.append(f"{path.name}: {exc}")
+            _report_progress(progress, index / total,
+                             f"Échec {index}/{total} : {path.name}")
+        finally:
+            if media is not None:
+                media.stream().close()
 
-    _report_progress(progress, 1.0, "Upload termine")
+    _report_progress(progress, 1.0,
+                     f"Upload terminé : {len(uploaded_names)}/{total} fichier(s) envoyé(s)"
+                     + (f" — {len(failed)} échec(s)" if failed else ""))
 
     return {"count": len(uploaded_names), "names": uploaded_names, "failed": failed}
 

@@ -42,7 +42,7 @@ Pro Tools export requires **[pt_api](https://github.com/sebedard-creator/pt_api)
 ## Workflow
 
 1. Add **mono 48 kHz BWF WAV** files with their original timestamps. Names must contain `BOOM` or `LAV`; if both types are present, their file counts must match.
-2. Click **Upload vers Google Drive**.
+2. Click **Upload vers Google Drive**. The progress bar shows the current file, its transfer percentage and the number of files sent.
 3. Open either backend in Colab and run its cells in order. You can save its URL in **Paramètres avancés** for the **Ouvrir Google Colab** button.
 4. Once processing finishes, click **Télécharger les fichiers traités en ZIP**.
 5. Extract the ZIP and open the `.ptx` session. It includes `Audio Files/`, with clips placed at their BWF timestamps on up to two PFX tracks, at **48 kHz / 23.976 fps**.

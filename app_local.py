@@ -111,16 +111,18 @@ def _names_preview(names, limit=8):
     return "\n".join(f"- {name}" for name in visible) + suffix
 
 
-def upload_raw_files(files):
+def upload_raw_files(files, progress=gr.Progress()):
     if not files:
         raise gr.Error("Depose d'abord les fichiers bruts dans la zone d'upload.")
 
     try:
+        progress(0.0, desc="Préparation des fichiers locaux...")
         staged_paths = drive_auth.stage_uploaded_files(files)
         if not staged_paths:
             raise gr.Error("Aucun fichier valide n'a ete recu.")
 
-        result = drive_auth.upload_files(staged_paths)
+        progress(0.0, desc="Connexion à Google Drive...")
+        result = drive_auth.upload_files(staged_paths, progress=progress)
     except gr.Error:
         raise
     except Exception as exc:

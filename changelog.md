@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Progression de l'upload Drive (2026-10-13)
+
+- Le bouton Upload transmet désormais l'objet de progression Gradio à Drive, comme le téléchargement ZIP. Affichage du fichier en cours, du pourcentage transféré et du nombre de fichiers envoyés.
+- Upload reprenable par blocs de 8 Mo, avec trois reprises pour les erreurs prises en charge par le client Google. Les échecs restent séparés des fichiers envoyés; fermeture des handles après chaque transfert.
+- Tests simulés de progression intermédiaire, compteur final, poursuite après échec et branchement du callback frontend; aucun upload réel requis pour ces tests.
+
 ### Noms explicites des backends utilisables (2026-10-12)
 
 - Deux variantes distribuées au choix : `Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb` et `Colab_Backend_PFX_Bandit_V4.ipynb`. Bandit quitte la désignation « Test »; modèles, DSP et réglages inchangés. Nouveau label de manifeste Bandit_V4, protocole2 identique et anciens lots compatibles.

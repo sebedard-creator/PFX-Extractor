@@ -17,6 +17,23 @@ warnings.filterwarnings(
 import app_local
 
 
+class UploadProgressTests(unittest.TestCase):
+    def test_upload_callback_forwards_gradio_progress(self):
+        from tests.test_drive_auth import ExplosiveProgress
+        progress = ExplosiveProgress()
+        paths = [Path('BOOM_01.wav'), Path('BOOM_02.wav')]
+        with patch.object(app_local.drive_auth, 'stage_uploaded_files', return_value=paths), \
+             patch.object(app_local.drive_auth, 'upload_files', return_value={
+                 'count': 2, 'names': [p.name for p in paths], 'failed': []}) as upload:
+            status, cleared_files = app_local.upload_raw_files(['uploaded1', 'uploaded2'], progress=progress)
+        upload.assert_called_once_with(paths, progress=progress)
+        self.assertEqual(len(progress.calls), 2)
+        self.assertIn('Préparation', progress.calls[0][1])
+        self.assertIn('Connexion', progress.calls[1][1])
+        self.assertIn('2 fichiers', status)
+        self.assertIsNone(cleared_files)
+
+
 class CombinedDownloadTests(unittest.TestCase):
     @patch("app_local.protools_export.create_protools_delivery")
     @patch("app_local.drive_auth.download_processed_files")
