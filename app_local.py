@@ -5,6 +5,7 @@ from pathlib import Path
 import drive_auth
 import protools_export
 
+FRONTEND_VERSION = "3.0.1"
 
 drive_auth.ensure_work_dirs()
 os.environ.setdefault("GRADIO_TEMP_DIR", str(drive_auth.GRADIO_TEMP_DIR))
@@ -235,6 +236,7 @@ def clear_cache(progress=gr.Progress()):
         +
         f"Elements locaux supprimes: {result['local_deleted']}\n"
         f"Fichiers Drive supprimes: {result['drive_deleted']}\n"
+        f"Dossiers de traitements Drive supprimés: {result.get('drive_folders_deleted', 0)}\n"
         f"Dossier conserve: {drive_auth.WORK_DIR}"
     )
     if local_failed:
@@ -274,8 +276,10 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
 
     with gr.Group(visible=False, elem_classes=["pfx-confirm"]) as clear_confirmation:
         gr.Markdown(
-            "Confirmer la suppression des fichiers locaux de travail et des fichiers Drive dans "
-            "`PFX_Extractor/1_Bruts_vers_Colab` et `PFX_Extractor/2_Environnements_IA`."
+            "Confirmer la suppression **définitive** des fichiers locaux de travail et des fichiers Drive dans "
+            "`PFX_Extractor/1_Bruts_vers_Colab` et `PFX_Extractor/2_Environnements_IA`, "
+            "**y compris les générations `run_…` et leurs WAV**. Téléchargez les ZIP à conserver avant de confirmer. "
+            "Ne lancez pas Colab pendant le nettoyage. Les dossiers racines, notebooks et modèles sont conservés."
         )
         with gr.Row():
             confirm_clear_btn = gr.Button("Confirmer", variant="stop", size="sm")
@@ -301,6 +305,7 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
         fn=upload_raw_files,
         inputs=raw_files,
         outputs=[status_box, raw_files],
+        concurrency_id="pfx_work", concurrency_limit=1,
         show_api=False,
     )
 
@@ -318,6 +323,7 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
     )
     confirm_clear_btn.click(
         fn=clear_cache,
+        concurrency_id="pfx_work", concurrency_limit=1,
         inputs=None,
         outputs=[
             status_box,
@@ -355,6 +361,7 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
 
     download_event = download_btn.click(
         fn=download_processed_zip,
+        concurrency_id="pfx_work", concurrency_limit=1,
         inputs=[protools_template, protools_session_name],
         outputs=[status_box, zip_output],
         show_api=False,
@@ -381,11 +388,11 @@ with gr.Blocks(title="PFX Extractor - Drive Bridge", css=CSS) as demo:
         show_api=False,
     )
 
-    gr.HTML("<div class='pfx-footer'>PFX Extractor v3.0 - 2026</div>")
+    gr.HTML(f"<div class='pfx-footer'>PFX Extractor — interface v{FRONTEND_VERSION} - 2026</div>")
 
 
 if __name__ == "__main__":
-    logger.info("Demarrage de PFX Extractor. Journal: %s", LOG_FILE)
+    logger.info("Demarrage de PFX Extractor — interface v%s. Journal: %s", FRONTEND_VERSION, LOG_FILE)
     demo.queue(default_concurrency_limit=1).launch(
         server_name="0.0.0.0",
         server_port=7862,

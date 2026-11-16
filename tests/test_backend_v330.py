@@ -15,6 +15,8 @@ def notebook(version='3_5_2'):
     filenames = {
         '3_5_2': 'Colab_Backend_PFX_MDX23C_BS_RoFormer_V3_5_2.ipynb',
         'test_V4': 'Colab_Backend_PFX_Bandit_V4.ipynb',
+        'bandit_4_1': 'Colab_Backend_PFX_Bandit_V4_1.ipynb',
+        'bandit_4_2': 'Colab_Backend_PFX_Bandit_V4_2.ipynb',
     }
     path = ROOT / filenames.get(version, f'Colab_Backend_PFX_V{version}.ipynb')
     if version == 'test_V3' and not path.exists():

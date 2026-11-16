@@ -155,6 +155,7 @@ class CacheProgressTests(unittest.TestCase):
         service.files.return_value.delete.return_value.execute.side_effect = [None, RuntimeError('locked')]
         with patch.object(drive_auth, 'authenticate_drive', return_value=service), \
              patch.object(drive_auth, 'get_pfx_folders', return_value=('parent','raw','out')), \
+             patch.object(drive_auth, '_list_cache_children', return_value=[]), \
              patch.object(drive_auth, '_list_files_in_folder', side_effect=[
                  [{'id':'one','name':'BOOM_01.wav'}, {'id':'two','name':'BOOM_02.wav'}], []]):
             result = drive_auth.clear_drive_cache(progress=progress)
@@ -263,7 +264,7 @@ class CacheProgressTests(unittest.TestCase):
         with patch.object(drive_auth,'clear_drive_cache',side_effect=drive), \
              patch.object(drive_auth,'clear_local_cache',side_effect=local):
             result=drive_auth.clear_all_cache(progress=progress,include_runtime=True)
-        self.assertEqual(result,{'drive_deleted':2,'drive_failed':[],
+        self.assertEqual(result,{'drive_deleted':2,'drive_folders_deleted':0,'drive_failed':[],
                                  'local_deleted':3,'local_failed':['locked local file']})
         self.assertEqual([v for v,_ in progress.calls],[0,.75,.75,1,1])
         self.assertIn('1 erreur',progress.calls[-1][1])

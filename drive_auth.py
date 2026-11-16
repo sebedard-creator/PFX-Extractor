@@ -3,6 +3,7 @@ import os
 import shutil
 import zipfile
 import json
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -393,52 +394,158 @@ def clear_local_cache(include_runtime=False, progress=None, failed=None):
     return deleted
 
 
+def _list_cache_children(service, folder_id):
+    """List actual children, including folders; never follow Drive shortcuts."""
+    items, token = [], None
+    while True:
+        response = service.files().list(
+            q=f"'{_escape_query(folder_id)}' in parents and trashed=false",
+            spaces='drive', pageSize=1000, pageToken=token,
+            fields='nextPageToken,files(id,name,mimeType,size,parents,md5Checksum,modifiedTime)',
+            includeItemsFromAllDrives=True, supportsAllDrives=True,
+        ).execute()
+        items.extend(response.get('files', []))
+        token = response.get('nextPageToken')
+        if not token:
+            return items
+
+
+def _read_cache_manifest(service, item, run_folder=None):
+    """Fail closed on unknown state, before any local or remote deletion."""
+    if int(item.get('size', 0)) > 16 * 1024 * 1024:
+        raise RuntimeError('Manifeste trop volumineux; nettoyage refusé.')
+    try:
+        manifest = json.loads(service.files().get_media(fileId=item['id']).execute())
+    except Exception as exc:
+        raise RuntimeError('Manifeste illisible; nettoyage refusé.') from exc
+    if not isinstance(manifest, dict) or manifest.get('status') not in ('running', 'failed', 'complete'):
+        raise RuntimeError('État du traitement inconnu; nettoyage refusé.')
+    if manifest['status'] == 'running':
+        raise RuntimeError(
+            'Traitement Colab en cours ou interrompu (status=running) : nettoyage refusé. '
+            'Vérifiez son arrêt et terminez ou relancez le traitement avant de nettoyer.'
+        )
+    if run_folder is not None and (
+            manifest.get('run_folder') != run_folder
+            or 'run_' + str(manifest.get('run_id', '')) != run_folder):
+        raise RuntimeError('Manifeste et dossier de traitement différents; nettoyage refusé.')
+    return manifest
+
+
+def _cache_pointer_fingerprint(children):
+    pointers = [item for item in children if item['name'] == DELIVERY_MANIFEST]
+    if len(pointers) > 1:
+        raise RuntimeError('Plusieurs manifestes actifs; nettoyage refusé.')
+    return tuple(pointers[0].get(key) for key in ('id', 'md5Checksum', 'modifiedTime', 'size')) if pointers else None
+
+
+def _guard_cache_cleanup(service, output_id, fingerprint, known_runs):
+    # A Colab run must not start while the user is cleaning caches. Recheck at
+    # each directory boundary, including immediately before deleting a folder.
+    children = _list_cache_children(service, output_id)
+    runs = {item['id'] for item in children
+            if item['mimeType'] == 'application/vnd.google-apps.folder'
+            and item['name'].startswith('run_')}
+    if _cache_pointer_fingerprint(children) != fingerprint or not runs.issubset(known_runs):
+        raise RuntimeError('Un traitement ou le manifeste a changé pendant le nettoyage; arrêt de sécurité.')
+
+
 def clear_drive_cache(progress=None):
     _report_progress(progress, 0.0, "Connexion à Google Drive pour le nettoyage...")
     service = authenticate_drive()
     _, raw_folder_id, processed_folder_id = get_pfx_folders(service)
 
-    deleted = 0
-    failed = []
-    folders = [
-        (RAW_FOLDER_NAME, raw_folder_id),
-        (PROCESSED_FOLDER_NAME, processed_folder_id),
-    ]
-
-    for folder_index, (folder_name, folder_id) in enumerate(folders, start=1):
-        base = (folder_index - 1) / len(folders)
-        span = 1 / len(folders)
-        _report_progress(progress, base, f"Drive / {folder_name} : inventaire des fichiers...")
-        files = _list_files_in_folder(service, folder_id)
-        total = len(files)
-        for file_index, item in enumerate(files, start=1):
+    deleted, folders_deleted, completed = 0, 0, 0
+    failed, jobs = [], []
+    _report_progress(progress, 0.0, 'Drive : vérification des traitements et inventaire des générations...')
+    output_children = _list_cache_children(service, processed_folder_id)
+    fingerprint = _cache_pointer_fingerprint(output_children)
+    for item in output_children:
+        if item['name'] == DELIVERY_MANIFEST:
+            _read_cache_manifest(service, item)
+    known_runs = {item['id'] for item in output_children
+                  if item['mimeType'] == 'application/vnd.google-apps.folder'
+                  and item['name'].startswith('run_')}
+    # Plan every generation BEFORE deleting anything: even a stale per-run
+    # running manifest blocks the entire cleanup (including local caches).
+    for folder in output_children:
+        if (folder['mimeType'] != 'application/vnd.google-apps.folder'
+                or not re.fullmatch(r'run_[A-Za-z0-9_-]+', folder['name'])):
+            continue
+        _report_progress(progress, 0.0, f"Drive : inventaire {folder['name']}...")
+        children = _list_cache_children(service, folder['id'])
+        manifests = [item for item in children if item['name'] == DELIVERY_MANIFEST]
+        if len(manifests) > 1:
+            raise RuntimeError(f"{folder['name']}: manifestes dupliqués, nettoyage refusé.")
+        if not manifests and children:
+            failed.append(f"{folder['name']}: manifeste absent, dossier conservé.")
+            continue
+        if manifests:
+            _read_cache_manifest(service, manifests[0], run_folder=folder['name'])
+        files = [item for item in children
+                 if item['mimeType'] != 'application/vnd.google-apps.folder'
+                 and (item['name'] == DELIVERY_MANIFEST or item['name'].lower().endswith('.wav'))
+                 and item['mimeType'] != 'application/vnd.google-apps.shortcut']
+        if len(files) != len(children):
+            files = [item for item in files if item['name'] != DELIVERY_MANIFEST]
+        # Retain the manifest until all WAV attempts have finished, to permit retries.
+        files.sort(key=lambda item: (item['name'] == DELIVERY_MANIFEST, item['name'].casefold()))
+        jobs.append((f"{PROCESSED_FOLDER_NAME}/{folder['name']}", folder['id'], files, True))
+    raw_files = _list_files_in_folder(service, raw_folder_id)
+    jobs.insert(0, (RAW_FOLDER_NAME, raw_folder_id, raw_files, False))
+    root_files = [item for item in output_children if item['mimeType'] != 'application/vnd.google-apps.folder']
+    root_files.sort(key=lambda item: (item['name'] == DELIVERY_MANIFEST, item['name'].casefold()))
+    jobs.append((PROCESSED_FOLDER_NAME, processed_folder_id, root_files, False))
+    total = sum(len(files) + int(remove_folder) for _, _, files, remove_folder in jobs)
+    for folder_name, folder_id, files, remove_folder in jobs:
+        _guard_cache_cleanup(service, processed_folder_id, fingerprint, known_runs)
+        folder_failed = False
+        if not files and not remove_folder:
+            _report_progress(progress, completed / max(total, 1), f"Drive / {folder_name} : aucun fichier à supprimer")
+        for item in files:
+            if not remove_folder and item['name'] == DELIVERY_MANIFEST:
+                _guard_cache_cleanup(service, processed_folder_id, fingerprint, known_runs)
             _report_progress(
-                progress,
-                base + (file_index - 1) / max(total, 1) * span,
-                f"Drive / {folder_name} : suppression {file_index}/{total} — {item['name']}",
+                progress, completed / max(total, 1),
+                f"Drive / {folder_name} : suppression {completed + 1}/{total} — {item['name']}",
             )
+            # Do not remove the recovery manifest if a WAV in this run failed.
+            if remove_folder and item['name'] == DELIVERY_MANIFEST and folder_failed:
+                completed += 1
+                continue
             try:
                 service.files().delete(
                     fileId=item["id"],
                     supportsAllDrives=True,
                 ).execute()
                 deleted += 1
-                _report_progress(progress, base + file_index / total * span,
+                completed += 1
+                _report_progress(progress, completed / max(total, 1),
                                  f"Drive : {deleted} fichier(s) supprimé(s) — {item['name']}")
-            except HttpError as exc:
-                failed.append(f"{folder_name}/{item.get('name', item['id'])}: {exc}")
-                _report_progress(progress, base + file_index / total * span,
-                                 f"Drive : non supprimé — {item.get('name', item['id'])}")
             except Exception as exc:
+                folder_failed = True
+                completed += 1
                 failed.append(f"{folder_name}/{item.get('name', item['id'])}: {exc}")
-                _report_progress(progress, base + file_index / total * span,
+                _report_progress(progress, completed / max(total, 1),
                                  f"Drive : non supprimé — {item.get('name', item['id'])}")
-        _report_progress(progress, base + span, f"Drive / {folder_name} : terminé"
-                         if total else f"Drive / {folder_name} : aucun fichier à supprimer")
+        if remove_folder:
+            _guard_cache_cleanup(service, processed_folder_id, fingerprint, known_runs)
+            remaining = _list_cache_children(service, folder_id)
+            if not remaining:
+                try:
+                    service.files().delete(fileId=folder_id, supportsAllDrives=True).execute()
+                    folders_deleted += 1
+                except Exception as exc:
+                    failed.append(f'{folder_name}: {exc}')
+            elif not folder_failed:
+                failed.append(f'{folder_name}: dossier conservé, contient encore des éléments non supprimés.')
+            completed += 1
+            _report_progress(progress, completed / max(total, 1),
+                             f'Drive : {deleted} fichier(s), {folders_deleted} dossier(s) supprimé(s)')
 
     _report_progress(progress, 1.0, f"Drive : {deleted} fichier(s) supprimé(s), {len(failed)} erreur(s)")
 
-    return {"deleted": deleted, "failed": failed}
+    return {"deleted": deleted, "folders_deleted": folders_deleted, "failed": failed}
 
 
 def clear_all_cache(progress=None, include_runtime=False):
@@ -457,6 +564,7 @@ def clear_all_cache(progress=None, include_runtime=False):
     return {
         "local_deleted": local_deleted,
         "drive_deleted": drive_result["deleted"],
+        "drive_folders_deleted": drive_result.get("folders_deleted", 0),
         "drive_failed": drive_result["failed"],
         "local_failed": local_failed,
     }

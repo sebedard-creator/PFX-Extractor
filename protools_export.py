@@ -152,7 +152,7 @@ def collect_processed_manifest(processed_dir, track_names=DEFAULT_TRACK_NAMES):
         expected = {entry['name']: entry for entry in outputs}
         if {path.name for path in audio_paths} != set(expected):
             raise ValueError('Les WAV locaux ne correspondent pas au lot vérifié.')
-        roles = [r for r in ('BOOM', 'LAV') if any(e['role'] == r for e in outputs)]
+        roles = sorted({e['role'] for e in outputs}, key=lambda role: (role.casefold(), role))
         if len(roles) > len(track_names):
             raise ValueError('Nombre de pistes insuffisant pour les microphones du lot.')
         tracks = dict(zip(roles, track_names))

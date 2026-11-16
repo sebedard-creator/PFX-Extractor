@@ -10,10 +10,11 @@ def begin_v352_delivery(input_folder, output_folder, settings, replace_interrupt
             raise RuntimeError('Un traitement est en cours ou interrompu. Confirmez son arrêt avant de relancer avec REMPLACER_RUN_INTERROMPU.')
     inputs = []
     names = set()
-    for path in sorted(Path(input_folder).iterdir()):
-        if not path.is_file() or path.suffix.lower() != '.wav' or path.name.startswith('._'):
-            continue
-        role = microphone_role(path.name)
+    files = [path for path in sorted(Path(input_folder).iterdir())
+             if path.is_file() and path.suffix.lower() == '.wav' and not path.name.startswith('._')]
+    roles = audio_set_roles([path.name for path in files])
+    for path in files:
+        role = roles[path.name]
         name = safe_audio_name(path.stem + '_PFX_Ready.wav')
         if name.casefold() in names:
             raise ValueError('Noms de sorties dupliqués.')
@@ -22,15 +23,13 @@ def begin_v352_delivery(input_folder, output_folder, settings, replace_interrupt
                            role=role, sha256=sha256_file(path), umid=read_wave_umid(path)))
     if not inputs:
         raise ValueError('Aucun WAV source.')
-    counts = {role: sum(e['role'] == role for e in inputs) for role in ('BOOM', 'LAV')}
-    if all(counts.values()) and counts['BOOM'] != counts['LAV']:
-        raise ValueError('Comptes BOOM/LAV différents.')
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '_' + uuid.uuid4().hex[:12]
     run_path = Path(output_folder) / ('run_' + run_id)
     run_path.mkdir(exist_ok=False)
-    manifest = dict(protocol=2, backend='V3.5.2', revision='2026-10-06-v352-generations',
+    manifest = dict(protocol=2, backend='V3.5.2', revision='2026-10-28-v352-sets',
                     run_id=run_id, run_folder=run_path.name, status='running',
-                    inputs=inputs, outputs=[], settings=settings, alignment=True, scene_merge=True)
+                    inputs=inputs, outputs=[], settings=settings,
+                    alignment=set(roles.values()) == {'BOOM', 'LAV'}, scene_merge=True)
     write_delivery_manifest(run_path / DELIVERY_MANIFEST, manifest)
     write_delivery_manifest(pointer, manifest)
     return dict(pointer=pointer, run_path=run_path, manifest=manifest, input_folder=Path(input_folder))

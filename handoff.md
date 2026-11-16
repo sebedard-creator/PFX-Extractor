@@ -1,5 +1,36 @@
 # Handoff - PFX Extractor
 
+## Date de session : 2026-11-16 — Bandit V4.2, contrôle de dépendances
+
+- Utilisateur rencontre le garde-fou cellule2 avec torch chargé/installé2.14.1+cu130, torchaudio2.11.0+cu130, CUDA13.0, GPUdisponibleTrue. Compatibilité confirmée dans https://docs.pytorch.org/audio/stable/installation.html : TorchAudio2.11 ABI stable avec PyTorch≥2.11. Faux positif du test d'égalité, pas preuve d'une session sale.
+- Après autorisation «okgo», nouvelle copie Colab_Backend_PFX_Bandit_V4_2.ipynb. V4.1 intacte SHA2565f3962f9bc2143ae920e544cab19f5033694f114d04291d7073c6cad2f13efc3. Cellule2 embarque backend_test/bandit_dependencies.py : anciennes paires égales + règle documentée2.11stable/min2.11stable, builds GPU cohérents, modules chargés=paquets installés. Pip auxiliaire contraint aux versions complètes torch/audio présentes, contrôle aprèsinstallation; pas de réinstallation de ces paquets ni de modèle supplémentaire.
+- Cellules1/4/5/6/8 strictement identiques, cellule3 uniquementnomtemp/logversion, cellule7 uniquementlabel/revision/logfin. Nouveau backendBandit_V4_2/revision2026-11-16-bandit-v4-2-torch-abi; protocole2 transparent pour LAN, aucun changement API/frontend. V4.1 conserve son ancien contrôle pour archivage, ne pas la modifier sous le même nom.
+- Tests dédiés avec modules/pip simulés et vraie livraison FFmpeg/BWF synthétique. Pas de GPUColab2.14 réel ici : ne pas garantir tout le pipeline sur toute dépendancefuture. Nouveau fichier local, aucun remplacement/uploadDrive à ce stade.
+- Résultat :120tests applicables exécutés,119passent/1skipWindows;10nouveaux tests42. BaselineV41SHA256 revérifié identique, gitdiffcheckOK. Deux anciens modules visantnotebooksretirés exclus comme auparavant. Documentationcourante pointeV4.2; anciennesV4/V4.1conservées. Aucun déploiement/restartLAN nécessaire pour ce changement de notebook.
+
+## Date de session : 2026-10-30 — nettoyage des générations Drive, frontend3.0.1
+
+- Après diagnostic utilisateur confirme la cause et autorise la correction du bouton. Audit Drive lecture seule :19dossiersrun,3258WAV,7106408644octets. Ancien nettoyage ignorait tous les sous-dossiers. Aucun fichier cloud réellement effacé pendant intervention; ne pas présenter les7,1Go comme déjà libérés.
+- `clear_drive_cache` planifie WAV/manifestes des générations directes `run_<id>`, états/identité vérifiés avant toute suppression, puis retire les seuls dossiers vides. Racines, modèles, notebooks, dossiers non identifiés, contenus inattendus/raccourcis préservés. Erreurs WAV gardent manifeste pourretry; sans manifeste nonvide conservé avec bilanerreur; running/JSONinvalide/doublons/identité incohérente bloquent l'opération. Recontrôle empreintepointeur/nouveaurun aux frontières; ne pas lancer Colab en parallèle, pas de verrou distribué.
+- UI confirmation explicite, compteurdrive_folders_deleted, callbacks destructifs/transferts sérialisés parpfx_work. FRONTEND_VERSION3.0.1 affichée/loggée. Aucun ipynb/DSP/API modifié sur cette révision. Le serveur ancien doit être redémarré au repos pour chargerlesmodifications.
+- Préférence utilisateur à conserver : prochaines révisions de notebooks = numéro incrémenté et nouveau fichier/uploadDrive, jamais remplacement silencieux du principal; anciennes versions conservées.
+- Suite locale110tests,109passent/1skipWindows. Tests spécifiques Drive simulé : purge des générations, invariants de périmètre, état running avant effacement cloud/local, manifestes corrompus, nouveaux runs/changementdepointeur, échec WAV puisretry, contenu inattendu, manifeste absent, runempty/failed, pagination; test queuecommuneGradio. Aucune purge réelle effectuée par l'agent.
+- Déploiement non effectué : tentative de redémarrage du serveur idle (PID8836, lancé28octobre, queuevide) rejetée par la politique d'exécution de cette session; aucun contournement. Le serveur reste à redémarrer manuellement pour charger frontend3.0.1. Ne pas annoncer le nouveau bouton déjà actif sans vérifier son footer/version.
+
+## Date de session : 2026-10-28 — ensembles génériques
+
+- Utilisateur bloqué en préflight par `Pr_Rep_1-Gain_01.wav`. Drive inspecté uniquement en métadonnées via OAuth local après recherche connecteur vide : 90 WAV, deux ensembles Pr_Rep_1/Pr_Rep_2 de 45 fichiers. Aucun son téléchargé ni fichier Drive modifié.
+- `microphone_role` accepte BOOM/LAV historiques ou préfixe avant indice final, retire `-Gain` et suffixe de rendu, conserve chiffres internes. `audio_set_roles` centralise détection déterministe, casse, doublons, deux pistes maximum et égalité des comptes en entrée. Manifestes anciens compatibles; validation des rôles génériques et mapping alphabétique aux pistes PFX dans le frontend.
+- Sources et notebooks publics V4/V4.1/MDX3.5.2 synchronisés sur place; référence locale ignorée Test V3 synchronisée uniquement pour le contrat/préflight. DSP et réglages inchangés. MDX ne devine pas de référence d'alignement pour les noms génériques. Aucun code API modifié.
+- Recharger le fichier ipynb corrigé (même nom), réexécuter les cellules définissant le moteur avant cellule7; redémarrer frontend inactif avant téléchargement car l'ancien validateur en mémoire exige BOOM/LAV. Ne pas interrompre de traitement actif. L'erreur est survenue avant lancement des modèles de cette opération.
+
+## Date de session : 2026-10-24 — Bandit V4.1, cris
+
+- Après analyse de V4, utilisateur autorise le renfort ciblé proposé et l'incrément du nom du notebook. Nouvelle copie Colab_Backend_PFX_Bandit_V4_1.ipynb; V4 et MDX3.5.2 inchangées. Ne pas qualifier les releases d'essais.
+- Classes officielles YAMNet6–11 Shout/Bellow/Whoop/Yell/Children shouting/Screaming : auparavant retrait humain général75% avec protectionPFX, absentes du masque résiduel explicite. Ajout DUCK_DEPTH_CRIS95, sentinelles et masque screaming(0.10/0.30, marge1hop, attaque.05/release.65). Renfort brut sans modération PFX, inclusion résidus natifs/amplifiés, veto bodytalk; 0désactive les deux ajouts sans désactiver retrait humain général.
+- Pas de nouveau modèle/passe; pré-denoise40, gain détecteur18dB, bodytalk4dB et contrat2 conservés. Sources backend_test/v41_*.py embarquées, backendBandit_V4_1, révision2026-10-24-bandit-v4-1-cris. Workflow frontal identique.
+- Sept tests dédiés réussis sur scores/audio synthétiques, dont vraie finition/exportFFmpeg N90001/TC1823255434/UMID neuf. L'écoute des cris de l'utilisateur n'a pas été réalisée : ne pas garantir la qualité ni la préservation parfaite du Foley simultané.
+
 ## Date de session : 2026-10-12 — deux backends utilisables, nomenclature
 
 - Sur demande utilisateur, Test V3 reste locale mais n'est plus versionnée : git rm --cached uniquement et règle .gitignore dédiée. Aucun fichier local supprimé.

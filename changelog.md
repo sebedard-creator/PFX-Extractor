@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Bandit V4.2 — compatibilité TorchAudio 2.11 (2026-11-16)
+
+- Nouveau `Colab_Backend_PFX_Bandit_V4_2.ipynb`, V4.1 conservée sans remplacement. Corrige le faux refus de la paire utilisateur PyTorch2.14.1+cu130/TorchAudio2.11.0+cu130, officiellement compatible par ABI stable.
+- Contrôles CUDA et versions chargées/installées; anciennes paires correspondantes conservées, autres familles non correspondantes non autorisées automatiquement. Les installations annexes conservent les versions torch/torchaudio du runtime via contraintes pip, sans réinstallation automatique. Diagnostic avant/après installation.
+- DSP, réglages, modèles et contrat de livraison inchangés; nouveau label Bandit_V4_2 et répertoire temporaire distinct. Aucun changement API/frontend, aucune réinitialisation de session requise pour ce faux positif. Pas de validation GPU réelle effectuée localement.
+- Vérifications :120tests de la suite applicable,119réussis/1ignoréWindows, dont10nouveaux tests dépendances/notebook/livraison. V4.1 conserve exactement son SHA256 initial; cellules audio et sliders identiques. Les deux anciens modules de tests visant des notebooks retirés restent exclus comme précédemment.
+
+
+### Interface LAN v3.0.1 — purge des générations Drive (2026-10-30)
+
+- Diagnostic en lecture seule : 19 générations, 3 258 WAV, environ7,1Go encore présents après nettoyage parce que les sous-dossiers étaient ignorés. Suppression désormais incluse pour les WAV/manifestes des générations identifiées, puis retrait des seuls dossiers vides. Notebooks, modèles et racines préservés.
+- Précontrôle des états `running`/inconnus/illisibles, contrôle d'identité des générations et recontrôles du pointeur/nouvelles générations entre dossiers. Pas de verrou interclients : ne pas lancer Colab pendant l'effacement. Génération non identifiée/contenu inattendu conservés et signalés; erreur WAV : manifeste conservé pour réessayer.
+- Confirmation explicite de suppression définitive incluant les `run_…`, compteur de dossiers et file Gradio commune pour upload/téléchargement/nettoyage. Version frontend affichée3.0.1; backends, DSP et API inchangés. Aucun cache Drive réel supprimé pendant le développement.
+- Vérification :110tests exécutés,109réussis et1ignoré (liens Windows), dont neuf tests de nettoyage Drive en mémoire et sérialisation des callbacks. Aucun appel de suppression cloud réel dans les tests.
+
+
+### Ensembles de pistes sans BOOM/LAV (2026-10-28)
+
+- Précontrôle des backends Bandit V4/V4.1 et MDX/RoFormer V3.5.2 : un ou deux ensembles identifiés par un préfixe stable et un indice final, sans obligation BOOM/LAV. Exemple Drive vérifié en lecture seule : `Pr_Rep_1-Gain_01…45` et `Pr_Rep_2-Gain_01…45`, 45 fichiers chacun. Les chiffres internes du préfixe restent distinctifs.
+- Contrat partagé et export frontend compatibles avec les rôles génériques; anciens lots BOOM/LAV conservés. Refus des noms indéterminés, doublons, troisième ensemble et comptes inégaux en entrée. Contrôles N/TC/SHA/UMID inchangés. Pas d'alignement acoustique deviné entre ensembles génériques dans MDX.
+- Notebooks synchronisés sur place, paramètres et DSP inchangés; recharger le notebook corrigé et redémarrer le frontend avant téléchargement. Aucune modification du dépôt pt_api ou des fichiers Drive.
+- Vérification : 100 tests locaux, 99 réussis et un ignoré (création de lien Windows); vraie construction/relecture PTX synthétique de 90 clips sur deux ensembles, N/TC/pistes exacts. Pas de traitement IA ni d'écoute des fichiers confidentiels pour ces tests.
+
+
+### Bandit V4.1 — cris humains (2026-10-24)
+
+- Nouveau `Colab_Backend_PFX_Bandit_V4_1.ipynb`; V4 conservée. Renfort ciblé `DUCK_DEPTH_CRIS=95` pour Shout/Bellow/Whoop/Yell/Children shouting/Screaming, indices6–11 contrôlés par sentinelles.
+- Masque temporel brut prioritaire sans réduction par protection PFX; classes ajoutées au détecteur résiduel natif/amplifié et au veto du gain bodytalk. Cumul des deux retraits conservé. À0%, seul le renfort dédié est désactivé.
+- Aucun nouveau passage de modèle. Pré-denoise40%, gain d'analyse+18dB, bodytalk+4dB, autres seuils et traitements inchangés. Sources v41_yamnet.py/v41_processing.py/v41_workflow.py embarquées; protocole2 inchangé avec backendBandit_V4_1 et révision datée.
+- Vérifications synthétiques des classes, faux déclenchements non humains, cumul/temporalité, contrôle0%, export BWF N/TC/UMID. L'écoute Colab reste nécessaire pour évaluer le retrait des cris et la perte de Foley simultané.
+
 ### Progression du nettoyage des caches (2026-10-13)
 
 - Le bouton de confirmation transmet la progression Gradio : connexion/inventaire Drive, fichiers supprimés, puis nettoyage local. Noms, compteurs et bilan des erreurs affichés; la barre couvre les deux phases.

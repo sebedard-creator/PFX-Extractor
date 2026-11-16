@@ -39,7 +39,7 @@ class CacheProgressTests(unittest.TestCase):
         from tests.test_drive_auth import ExplosiveProgress
         progress=ExplosiveProgress()
         with patch.object(app_local.drive_auth,'clear_all_cache',return_value={
-                'local_deleted':5,'drive_deleted':10,
+                'local_deleted':5,'drive_deleted':10,'drive_folders_deleted':19,
                 'local_failed':['locked.zip'],'drive_failed':['BOOM_03.wav']}) as clear:
             status,files,archive,confirmation=app_local.clear_cache(progress=progress)
         clear.assert_called_once_with(include_runtime=True,progress=progress)
@@ -48,8 +48,17 @@ class CacheProgressTests(unittest.TestCase):
         self.assertIn('BOOM_03.wav',status)
         self.assertIn('5',status)
         self.assertIn('10',status)
+        self.assertIn('Dossiers de traitements Drive supprimés: 19',status)
         self.assertIsNone(files)
         self.assertIsNone(archive)
+
+    def test_upload_download_and_cleanup_share_one_execution_queue(self):
+        callbacks = (app_local.upload_raw_files, app_local.download_processed_zip, app_local.clear_cache)
+        events = [event for event in app_local.demo.fns.values() if event.fn in callbacks]
+        self.assertEqual(len(events), 3)
+        for event in events:
+            self.assertEqual(event.concurrency_id, 'pfx_work')
+            self.assertEqual(event.concurrency_limit, 1)
 
 
 class CombinedDownloadTests(unittest.TestCase):

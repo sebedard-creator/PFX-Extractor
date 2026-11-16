@@ -74,10 +74,11 @@ def preflight_v4_inputs():
                    key=lambda p: natural_sort_key(p.name))
     if not files:
         raise ValueError('Aucun WAV source.')
+    roles = audio_set_roles([path.name for path in files])
     seen = set()
     entries = []
     for path in files:
-        role = microphone_role(path.name)
+        role = roles[path.name]
         output_name = path.stem + '_PFX_Ready.wav'
         safe_audio_name(output_name)
         if output_name.casefold() in seen:
@@ -86,7 +87,4 @@ def preflight_v4_inputs():
         info = inspect_delivery_wave(path)
         entries.append(dict(info, name=path.name, output_name=output_name,
                             role=role, sha256=sha256_file(path), umid=read_wave_umid(path)))
-    counts = {role: sum(e['role'] == role for e in entries) for role in ('BOOM', 'LAV')}
-    if all(counts.values()) and counts['BOOM'] != counts['LAV']:
-        raise ValueError(f'Comptes BOOM/LAV différents : {counts}. Aucun appariement ni décalage appliqué.')
     return entries

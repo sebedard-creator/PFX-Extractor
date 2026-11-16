@@ -108,11 +108,49 @@ def safe_audio_name(name):
 
 
 def microphone_role(name):
+    """Legacy BOOM/LAV role, otherwise the stable prefix before the clip index.
+
+    Strip only the FINAL index: Pr_Rep_1-Gain_01 belongs to Pr_Rep_1,
+    not Pr_Rep. Input and _PFX_Ready output names must resolve identically.
+    """
     safe_audio_name(name)
     roles = [role for role in ('BOOM', 'LAV') if role.casefold() in name.casefold()]
-    if len(roles) != 1:
-        raise ValueError(f'Nom ambigu : un seul identifiant BOOM ou LAV requis : {name}')
-    return roles[0]
+    if len(roles) > 1:
+        raise ValueError(f'Nom ambigu : BOOM et LAV présents ensemble : {name}')
+    if roles:
+        return roles[0]
+    stem = re.sub(r'_PFX_Ready$', '', name[:-4], flags=re.IGNORECASE)
+    match = re.fullmatch(r'(.+?)[_ -]+\d+', stem)
+    if match is None:
+        raise ValueError(f'Ensemble indéterminé : préfixe stable et indice final requis : {name}')
+    family = re.sub(r'-Gain$', '', match.group(1), flags=re.IGNORECASE).rstrip(' _-')
+    if not family:
+        raise ValueError(f'Préfixe de piste vide : {name}')
+    return family
+
+
+def audio_set_roles(names, require_equal_counts=True):
+    """Infer one/two sets deterministically, without inferring an acoustic role."""
+    result, groups, counts = {}, {}, {}
+    seen = set()
+    for name in sorted(names, key=lambda value: (value.casefold(), value)):
+        safe_audio_name(name)
+        key = name.casefold()
+        if key in seen:
+            raise ValueError('Noms WAV dupliqués sans tenir compte de la casse.')
+        seen.add(key)
+        role = microphone_role(name)
+        canonical = groups.setdefault(role.casefold(), role)
+        result[name] = canonical
+        counts[canonical] = counts.get(canonical, 0) + 1
+    if not result:
+        raise ValueError('Aucun WAV source.')
+    if len(groups) > 2:
+        raise ValueError(f'{len(groups)} ensembles détectés, deux pistes maximum : {counts}')
+    if require_equal_counts and len(counts) == 2 and len(set(counts.values())) != 1:
+        label = 'Comptes BOOM/LAV' if set(counts) == {'BOOM', 'LAV'} else 'Comptes des ensembles'
+        raise ValueError(f'{label} différents : {counts}. Aucun appariement ni décalage appliqué.')
+    return result
 
 
 def sha256_file(path):
@@ -190,6 +228,8 @@ def validate_delivery_manifest(manifest):
     outputs = manifest.get('outputs')
     if not isinstance(outputs, list) or not outputs:
         raise ValueError('Manifeste sans WAV.')
+    # Older complete manifests may contain unequal role counts; retain compatibility.
+    roles = audio_set_roles([item['name'] for item in outputs], require_equal_counts=False)
     names = set()
     identities = set()
     source_identities = {e['umid'][:64] for e in manifest.get('inputs', []) if 'umid' in e}
@@ -198,8 +238,8 @@ def validate_delivery_manifest(manifest):
         if name.casefold() in names:
             raise ValueError('WAV dupliqué dans le manifeste.')
         names.add(name.casefold())
-        if item.get('role') != microphone_role(name):
-            raise ValueError('Rôle BOOM/LAV incohérent dans le manifeste.')
+        if item.get('role') != roles[name]:
+            raise ValueError('Ensemble de piste incohérent dans le manifeste.')
         if not re.fullmatch(r'[0-9a-f]{64}', item.get('sha256', '')):
             raise ValueError('Empreinte WAV invalide.')
         if (type(item.get('frames')) is not int or not 1024 <= item['frames'] <= 0xffffff
